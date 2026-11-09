@@ -34,6 +34,7 @@ typedef struct {
     int32_t A[TR_NMAX];          /* areas, cm^2 Q12 */
     int32_t jl, jr, jn;          /* three-way junction (Q14): left, right, nose */
     int32_t gref, lref, nref;    /* end reflections with the guide's losses lumped in (Q14) */
+    int32_t jacc, nlast;         /* MODE 2X N1: the nose's junction input held over a step, its last output */
     uint32_t gph[TR_NGLOT];      /* glottal phases */
     int32_t tilt[TR_NGLOT];      /* source low-pass */
     int32_t nz, nf1, nf2;        /* noise: xorshift, its band-pass state */
@@ -109,8 +110,15 @@ static void tr_control(tract_t *tr, const int16_t *p)
 /* one step of the waveguide at the internal rate: the glottal input g, returns lips + nose. The wall losses
  * are lumped into the three end reflections (tr->gref, lref, nref: tr_control), not taken at every section:
  * a uniform loss per section commutes with the lossless scattering for the paths between the ends, which
- * carry nearly all the energy, and it saves two operations a junction */
-static inline int32_t tr_step(tract_t *tr, int32_t g, int32_t nzs)
+ * carry nearly all the energy, and it saves two operations a junction. nose: 0 = the nasal branch holds this
+ * step (MODE 2X N1: the nose at half the oral rate; its junction input is averaged over the two steps).
+ * Runs from RAM (.ram_text, no calls): the hot loop off the XIP cache */
+#if defined(__APPLE__) || defined(__EMSCRIPTEN__) || defined(__linux__)
+#define TR_RAMFN static __attribute__((noinline))
+#else
+#define TR_RAMFN static __attribute__((section(".ram_text"), noinline, used))
+#endif
+TR_RAMFN int32_t tr_step(tract_t *tr, int32_t g, int32_t nzs, uint32_t nose_on)
 {
     int32_t *R = tr->R, *L = tr->L, *k = tr->k;
     uint32_t i, n = tr->n, ns = tr->ns, nn = tr->nn;
@@ -132,9 +140,12 @@ static inline int32_t tr_step(tract_t *tr, int32_t g, int32_t nzs)
         R[ns] = ((tr->jr * li) >> TR_Q) + (((16384 + tr->jr) * (rp + nl0)) >> TR_Q);
         jn = ((tr->jn * nl0) >> TR_Q) + (((16384 + tr->jn) * (li + rp)) >> TR_Q);
         rp = rn;
-        {   /* the nose, from its junction to the nostrils */
+        if (!nose_on) {                                    /* half rate, first step: the nose holds */
+            tr->jacc = jn;
+            nose = tr->nlast;
+        } else {   /* the nose, from its junction to the nostrils */
             int32_t *nR = tr->nR, *nL = tr->nL, *nk = tr->nk, np = nR[0];
-            nR[0] = jn;
+            nR[0] = nose_on == 1u ? (jn + tr->jacc) >> 1 : jn;
             for (i = 1; i < nn; i++) {
                 int32_t ni = nL[i], nw = (nk[i] * (np + ni)) >> TR_Q, nx = nR[i];
                 nR[i] = np - nw;
@@ -142,7 +153,7 @@ static inline int32_t tr_step(tract_t *tr, int32_t g, int32_t nzs)
                 np = nx;
             }
             nL[nn - 1] = (np * tr->nref) >> TR_Q;
-            nose = nR[nn - 1];
+            nose = tr->nlast = nR[nn - 1];
         }
     }
     for (i = ns + 1u; i < n; i++) {                        /* velum -> lips */
@@ -163,17 +174,18 @@ static inline int32_t tr_step(tract_t *tr, int32_t g, int32_t nzs)
     return lip + nose;
 }
 
-static void tract_setup(tract_t *tr, uint32_t os)
+/* MODE 0 1X 22 (all at 44.1 kHz), 1 2X 44 (all at 88.2 kHz), 2 2X N1 (the mouth at 88.2, the nose at 44.1) */
+static void tract_setup(tract_t *tr, uint32_t mode)
 {
-    uint32_t i;
-    tr->os = (uint8_t)os;
+    uint32_t i, os = mode ? 2u : 1u, nos = mode == 1u ? 2u : 1u;
+    tr->os = (uint8_t)(mode + 1u);
     tr->n = (uint8_t)(os == 2u ? TR_NMAX : TR_NMAX / 2u);
-    tr->nn = (uint8_t)(os == 2u ? TR_NNMAX : TR_NNMAX / 2u);
+    tr->nn = (uint8_t)(nos == 2u ? TR_NNMAX : TR_NNMAX / 2u);
     tr->ns = (uint8_t)(tr->n * 17u / 44u);                 /* the velum: 17 of 44 sections from the glottis */
     /* the losses: 0.999 a section at 2x (Pink Trombone's), as ~(1 - n / 1024) at each end of a pass */
     tr->gref = TR_GREF - ((TR_GREF * (int32_t)tr->n * (int32_t)(3u - os)) >> 10);
     tr->lref = TR_LREF - ((TR_LREF * (int32_t)tr->n * (int32_t)(3u - os)) >> 10);
-    tr->nref = TR_NREF - ((TR_NREF * (int32_t)tr->nn * (int32_t)(3u - os)) >> 9);
+    tr->nref = TR_NREF - ((TR_NREF * (int32_t)tr->nn * (int32_t)(3u - nos)) >> 9);
     for (i = 0; i < TR_NMAX; i++)
         tr->R[i] = tr->L[i] = 0;
     for (i = 0; i < TR_NNMAX; i++)
@@ -202,12 +214,12 @@ static void tract_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
 {
     tract_t *tr = tr_of(t);
     const int16_t *p = t->p;
-    uint32_t os = p[P_E1] ? 2u : 1u, ng = 1u + (uint32_t)clamp(p[P_E2], 0, 2), i, j;
+    uint32_t mode = (uint32_t)clamp(p[P_E1], 0, 2), os = mode ? 2u : 1u, ng = 1u + (uint32_t)clamp(p[P_E2], 0, 2), i, j;
     uint32_t inc[TR_NGLOT], te, tp, rp, rn;
     int32_t oq, tiltk, gv, gn, nst;
     (void)v;
-    if (tr->os != os || !tr->n)
-        tract_setup(tr, os);
+    if (tr->os != mode + 1u || !tr->n)
+        tract_setup(tr, mode);
     tr_control(tr, p);
     for (j = 0; j < ng; j++)
         inc[j] = (uint32_t)(((uint64_t)m->inc * TR_CHOIR_Q16[j]) >> 16);
@@ -246,9 +258,14 @@ static void tract_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
                 nzs = ((tr->nf1 - tr->nf2) * tr->ngain) >> 15;
             }
         }
-        a = tr_step(tr, g, nzs);
-        if (os == 2u)
-            a = (a + tr_step(tr, g, nzs)) >> 1;
+        {   /* tr_step lives in RAM, beyond a direct jump from XIP: one pointer per block (bsp FL_FAR's way) */
+            int32_t (*volatile vstep)(tract_t *, int32_t, int32_t, uint32_t) = tr_step;
+            int32_t (*step)(tract_t *, int32_t, int32_t, uint32_t) = vstep;
+            if (os == 2u)
+                a = (step(tr, g, nzs, mode == 1u ? 2u : 0u) + step(tr, g, nzs, mode == 1u ? 2u : 1u)) >> 1;
+            else
+                a = step(tr, g, nzs, 2u);
+        }
         y = a - tr->dc_x + ((tr->dc_y * 32604 + 16384) >> 15);   /* DC blocker, ~10 Hz (rounded: a floor here */
         tr->dc_x = a;                                            /* leaves a standing offset of 100 LSB) */
         tr->dc_y = y;
@@ -258,12 +275,18 @@ static void tract_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     tr->nz = nst;
 }
 
-static const char *const TR_MODE[] = {"1X 22", "2X 44"};
+static const char *const TR_MODE[] = {"1X 22", "2X 44", "2X N1"};
 
 static const preset_t TRACT_PRESETS[] = {
-    /* VOWEL MODE CHOIR NOISE | TENSE BREATH VELUM LIPS */
+    /* VOWEL MODE CHOIR NOISE | TENSE BREATH VELUM LIPS; MIDI Program Change 0..5 (scripts/fm1_probe.py) */
     {"PROBE AH", {0, 1, 0, 0, 64, 10, 0, 100}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
     {"PROBE WORST", {64, 1, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
+    {"WORST 1X", {64, 0, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
+    {"SOLO 2X", {64, 1, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"SOLO 1X", {64, 0, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"AH 1X", {0, 0, 0, 0, 64, 10, 0, 100}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"SOLO 2XN1", {64, 2, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"WORST 2XN1", {64, 2, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
 };
 
 static const engine_t ENG_TRACT = {
@@ -271,7 +294,7 @@ static const engine_t ENG_TRACT = {
     .page_title = {"MOUTH", "VOICE"},
     .edit = {
         {"VOWEL", F_INT, 0, 127, 0, 0, 0},
-        {"MODE", F_ENUM, 0, 1, 1, TR_MODE, 0},
+        {"MODE", F_ENUM, 0, 2, 1, TR_MODE, 0},
         {"CHOIR", F_INT, 0, 2, 0, 0, 0},
         {"NOISE", F_PCT, 0, 127, 0, 0, 0},
         {"TENSE", F_PCT, 0, 127, 64, 0, 0},
