@@ -33,7 +33,7 @@
 #define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
 #endif
 #ifndef FELUCCA_ID
-#define FELUCCA_ID "FM-1_900"    /* package identity (build.py: the .fwsc marker string) */
+#define FELUCCA_ID "FM-1_707"    /* package identity (build.py: the .fwsc marker string): NOICE VOICE */
 #endif
 #ifndef FELUCCA_CPU2
 #define FELUCCA_CPU2 1           /* 1 (1.6.1): the second core is built in and renders some parts when MENU > SYSTEM >
@@ -48,7 +48,10 @@
 #define FM1_CRASH_CTX_N 1u         /* chip/fm1_irq.h: the registers of the last crash only (80 B of .noinit; four would
                                     * not fit beside the project slots) */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "v1.8.1" /* shown in the menu, the console and the editor; build.py --release X.Y */
+#define FELUCCA_VERSION "v0.1-probe" /* NOICE VOICE; shown in the menu, the console and the editor; build.py --release X.Y */
+#endif
+#ifndef NOICE_PROBE
+#define NOICE_PROBE 1            /* 1: the hardware probe (Felucca's UI, TRACT in VOICE's engine slot, CPU on GLO > SYSTEM) */
 #endif
 #if FELUCCA_OTA && !FELUCCA_FLASH
 #error "FELUCCA_OTA needs FELUCCA_FLASH"

@@ -30,6 +30,10 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #include "../engines/src/eng_lofi.c"
 #include "eng_sample.c"
 #include "eng_formant.c"
+#ifndef NOICE_PROBE
+#define NOICE_PROBE 1            /* (felucca.c's default, for the host tests that include this file directly) */
+#endif
+#include "eng_tract.c"          /* TRACT: the NOICE VOICE vocal tract (NOICE_PROBE: in VOICE's slot) */
 #include "../engines/src/eng_trio.c"
 #include "../engines/src/eng_wheel.c"
 #include "eng_grain.c"
@@ -59,7 +63,11 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_PHASE,                  /* 2 */
     &ENG_LOFI,                   /* 3 */
     &ENG_SAMPLE,                 /* 4 */
+#if NOICE_PROBE
+    &ENG_TRACT,                  /* 5: the probe build plays TRACT where VOICE was (same slot, no renumbering) */
+#else
     &ENG_FORMANT,                /* 5 VOICE (eng_formant.c: "voice" is a sounding note in voice.c) */
+#endif
     &ENG_TRIO,                   /* 6 */
     &ENG_WHEEL,                  /* 7 */
     &ENG_GRAIN,                  /* 8 */
