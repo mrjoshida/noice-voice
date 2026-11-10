@@ -197,7 +197,15 @@ def main():
     lines.append("")
 
     # 4. Static Vector Head Outlines: Skull & Palate
-    skull_pts = [(tx(p['x']), ty(p['y'])) for p in male['skull_outer']]
+    # male['skull_outer'] was snapshotted from schwa's dynamic f.outer polyline:
+    #   [0..19]  = posterior pharyngeal wall (glottis -> y=45)
+    #   [20..29] = frozen shut-velum oral roof (omit so opening the velum stays unobstructed)
+    #   [30..63] = palate duplicate (drawn separately via NV_PALATE)
+    #   [64..70] = frozen upper_lip_in (drawn dynamically via NV_UPPER_LIP)
+    # Keep [0..19] and continue up along the nasopharynx vault to NV_VELUM[0] (56, 22).
+    phar_wall_pts = [(tx(p['x']), ty(p['y'])) for p in male['skull_outer'][:20]]
+    nasopharynx_pts = [(27, 39), (28, 33), (31, 27), (36, 23), (44, 21), (56, 22)]
+    skull_pts = phar_wall_pts + nasopharynx_pts
     palate_pts = [(tx(p['x']), ty(p['y'])) for p in male['palate']]
     lines.append(f"#define NV_NSKULL {len(skull_pts)}")
     lines.append(f"static const nv_pt_t NV_SKULL[{len(skull_pts)}] = {{")

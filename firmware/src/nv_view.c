@@ -74,6 +74,13 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                     int32_t ey = (int32_t)NV_SKULL[i + 1].y - strip_y;
                     nv_vec_line(buf, w, h, sx, sy, ex, ey, wcol);
                 }
+                for (i = 0; i < NV_NPALATE - 1; i += 2) {
+                    int32_t sx = (int32_t)NV_PALATE[i].x;
+                    int32_t sy = (int32_t)NV_PALATE[i].y - 2 - strip_y;
+                    int32_t ex = (int32_t)NV_PALATE[i + 1].x;
+                    int32_t ey = (int32_t)NV_PALATE[i + 1].y - 2 - strip_y;
+                    nv_vec_line(buf, w, h, sx, sy, ex, ey, wcol);
+                }
             }
         }
 
@@ -169,39 +176,118 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 }
             }
 
-            /* E. Jaw Bone (coral line) */
-            int32_t jaw_drop = ((int32_t)a->cur_jaw * 18) / 127;
+            /* E. Jaw Bone (coral line; NV_JAW already bakes condyle rotation across iy) */
             nv_pt_t live_jaw[NV_NJAW];
             for (i = 0; i < NV_NJAW; i++) {
-                live_jaw[i].x = NV_JAW[iy][i].x;
-                live_jaw[i].y = (int16_t)(NV_JAW[iy][i].y + jaw_drop);
+                int32_t j0x = NV_JAW[iy][i].x,      j0y = NV_JAW[iy][i].y;
+                int32_t j1x = NV_JAW[iy + 1u][i].x, j1y = NV_JAW[iy + 1u][i].y;
+                live_jaw[i].x = (int16_t)(j0x + (((j1x - j0x) * (int32_t)fy) / 256));
+                live_jaw[i].y = (int16_t)(j0y + (((j1y - j0y) * (int32_t)fy) / 256));
             }
             nv_vec_poly(buf, w, h, live_jaw, NV_NJAW, strip_y, nv_col(NV_COL_CORAL, mono_mode));
 
-            /* F. Vermilion Lips (pink outline) */
-            int32_t lip_u = clamp((a->cur_lips - 512) / 120, 0, 127);
-            int32_t lip_ap = (lip_u * 14) / 127;
-            nv_pt_t live_ulip[NV_NUPPER_LIP];
-            nv_pt_t live_llip[NV_NLOWER_LIP];
-            for (i = 0; i < NV_NUPPER_LIP; i++) {
-                live_ulip[i].x = (int16_t)(NV_UPPER_LIP[iy][ix][i].x + (lip_ap >> 1));
-                live_ulip[i].y = NV_UPPER_LIP[iy][ix][i].y;
+            /* F. Vermilion Lips (pink outline; bilinearly interpolated on 3x3 grid with tapered
+             * bilabial aperture & controlled rounding so lips close cleanly at 0 and stay onscreen) */
+            {
+                static const int16_t LIP_W[12] = {0, 24, 64, 120, 180, 232, 256, 232, 168, 96, 36, 0};
+                int32_t lip_u = clamp((a->cur_lips - 512 + 60) / 120, 0, 127);
+                nv_pt_t base_ul[NV_NUPPER_LIP];
+                nv_pt_t base_ll[NV_NLOWER_LIP];
+                nv_pt_t live_ulip[NV_NUPPER_LIP];
+                nv_pt_t live_llip[NV_NLOWER_LIP];
+                for (i = 0; i < NV_NUPPER_LIP; i++) {
+                    int32_t u00x = NV_UPPER_LIP[iy][ix][i].x,      u00y = NV_UPPER_LIP[iy][ix][i].y;
+                    int32_t u01x = NV_UPPER_LIP[iy][ix + 1u][i].x, u01y = NV_UPPER_LIP[iy][ix + 1u][i].y;
+                    int32_t u10x = NV_UPPER_LIP[iy + 1u][ix][i].x, u10y = NV_UPPER_LIP[iy + 1u][ix][i].y;
+                    int32_t u11x = NV_UPPER_LIP[iy + 1u][ix + 1u][i].x, u11y = NV_UPPER_LIP[iy + 1u][ix + 1u][i].y;
+                    int32_t utx = u00x + (((u01x - u00x) * (int32_t)fx) / 256);
+                    int32_t uty = u00y + (((u01y - u00y) * (int32_t)fx) / 256);
+                    int32_t ubx = u10x + (((u11x - u10x) * (int32_t)fx) / 256);
+                    int32_t uby = u10y + (((u11y - u10y) * (int32_t)fx) / 256);
+                    base_ul[i].x = (int16_t)(utx + (((ubx - utx) * (int32_t)fy) / 256));
+                    base_ul[i].y = (int16_t)(uty + (((uby - uty) * (int32_t)fy) / 256));
+                }
+                for (i = 0; i < NV_NLOWER_LIP; i++) {
+                    int32_t l00x = NV_LOWER_LIP[iy][ix][i].x,      l00y = NV_LOWER_LIP[iy][ix][i].y;
+                    int32_t l01x = NV_LOWER_LIP[iy][ix + 1u][i].x, l01y = NV_LOWER_LIP[iy][ix + 1u][i].y;
+                    int32_t l10x = NV_LOWER_LIP[iy + 1u][ix][i].x, l10y = NV_LOWER_LIP[iy + 1u][ix][i].y;
+                    int32_t l11x = NV_LOWER_LIP[iy + 1u][ix + 1u][i].x, l11y = NV_LOWER_LIP[iy + 1u][ix + 1u][i].y;
+                    int32_t ltx = l00x + (((l01x - l00x) * (int32_t)fx) / 256);
+                    int32_t lty = l00y + (((l01y - l00y) * (int32_t)fx) / 256);
+                    int32_t lbx = l10x + (((l11x - l10x) * (int32_t)fx) / 256);
+                    int32_t lby = l10y + (((l11y - l10y) * (int32_t)fx) / 256);
+                    base_ll[i].x = (int16_t)(ltx + (((lbx - ltx) * (int32_t)fy) / 256));
+                    base_ll[i].y = (int16_t)(lty + (((lby - lty) * (int32_t)fy) / 256));
+                }
+                {
+                    int32_t base_gap = (int32_t)base_ll[6].y - (int32_t)base_ul[6].y;
+                    int32_t full_gap = base_gap > 16 ? base_gap : 16;
+                    int32_t target_gap = (full_gap * lip_u) / 127;
+                    int32_t delta_gap = target_gap - base_gap;
+                    int32_t ul_dy = -((delta_gap * 35) / 100);
+                    int32_t ll_dy = delta_gap + ul_dy; /* guarantees ll[6].y - ul[6].y == target_gap */
+                    int32_t prot_dx = (lip_u * 4) / 127;
+                    for (i = 0; i < NV_NUPPER_LIP; i++) {
+                        int32_t w_i = LIP_W[i];
+                        live_ulip[i].x = (int16_t)clamp((int32_t)base_ul[i].x + ((prot_dx * w_i) / 256), 0, 172);
+                        live_ulip[i].y = (int16_t)clamp((int32_t)base_ul[i].y + ((ul_dy * w_i) / 256), 18, 170);
+                    }
+                    for (i = 0; i < NV_NLOWER_LIP; i++) {
+                        int32_t w_i = LIP_W[i];
+                        live_llip[i].x = (int16_t)clamp((int32_t)base_ll[i].x + ((prot_dx * w_i) / 256), 0, 172);
+                        live_llip[i].y = (int16_t)clamp((int32_t)base_ll[i].y + ((ll_dy * w_i) / 256), 18, 170);
+                    }
+                }
+                nv_vec_poly(buf, w, h, live_ulip, NV_NUPPER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
+                nv_vec_poly(buf, w, h, live_llip, NV_NLOWER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
             }
-            for (i = 0; i < NV_NLOWER_LIP; i++) {
-                live_llip[i].x = (int16_t)(NV_LOWER_LIP[iy][ix][i].x + (lip_ap >> 1));
-                live_llip[i].y = (int16_t)(NV_LOWER_LIP[iy][ix][i].y + jaw_drop);
-            }
-            nv_vec_poly(buf, w, h, live_ulip, NV_NUPPER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
-            nv_vec_poly(buf, w, h, live_llip, NV_NLOWER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
 
-            /* G. Velum / Soft palate port */
-            int32_t vel_open = (a->cur_velum * 12) / 3276;
-            nv_pt_t live_velum[NV_NVELUM];
-            for (i = 0; i < NV_NVELUM; i++) {
-                live_velum[i].x = NV_VELUM[i].x;
-                live_velum[i].y = (int16_t)(NV_VELUM[i].y - (i > 8 ? vel_open : 0));
+            /* G. Velum / Soft palate port (rotates downward-forward around PNS hinge (57, 28) by 0..46 deg) */
+            {
+                static const int16_t VEL_COS_Q14[47] = {
+                    16384, 16382, 16374, 16362, 16344, 16322, 16294, 16262, 16225, 16182,
+                    16135, 16083, 16026, 15964, 15897, 15826, 15749, 15668, 15582, 15491,
+                    15396, 15296, 15191, 15082, 14968, 14849, 14726, 14598, 14466, 14330,
+                    14189, 14044, 13894, 13741, 13583, 13421, 13255, 13085, 12911, 12733,
+                    12551, 12365, 12176, 11982, 11786, 11585, 11381,
+                };
+                static const int16_t VEL_SIN_Q14[47] = {
+                        0,   286,   572,   857,  1143,  1428,  1713,  1997,  2280,  2563,
+                     2845,  3126,  3406,  3686,  3964,  4240,  4516,  4790,  5063,  5334,
+                     5604,  5872,  6138,  6402,  6664,  6924,  7182,  7438,  7692,  7943,
+                     8192,  8438,  8682,  8923,  9162,  9397,  9630,  9860, 10087, 10311,
+                    10531, 10749, 10963, 11174, 11381, 11585, 11786,
+                };
+                int32_t vel_clamped = clamp(a->cur_velum, 0, 3276);
+                int32_t deg_q8 = (vel_clamped * (46 * 256)) / 3276;
+                uint32_t d0 = (uint32_t)(deg_q8 / 256);
+                int32_t df = deg_q8 - (int32_t)(d0 * 256u);
+                uint32_t d1 = d0 < 46u ? d0 + 1u : 46u;
+                int32_t cos_q14 = VEL_COS_Q14[d0] + (((VEL_COS_Q14[d1] - VEL_COS_Q14[d0]) * df) / 256);
+                int32_t sin_q14 = VEL_SIN_Q14[d0] + (((VEL_SIN_Q14[d1] - VEL_SIN_Q14[d0]) * df) / 256);
+                const int32_t pns_x = 57, pns_y = 28;
+                nv_pt_t live_velum[NV_NVELUM];
+                for (i = 0; i < NV_NVELUM; i++) {
+                    int32_t s_idx = (i <= 10u) ? (int32_t)i : (int32_t)(21u - i);
+                    int32_t t_arm_q8 = s_idx >= 3 ? 256 : (s_idx * 256) / 3;
+                    int32_t r_scale_q8 = 256 - ((46 * t_arm_q8) / 256);
+                    int32_t vx = (int32_t)NV_VELUM[i].x;
+                    int32_t vy = (int32_t)NV_VELUM[i].y;
+                    int32_t rx_q8 = (vx - pns_x) * r_scale_q8;
+                    int32_t ry_q8 = (vy - pns_y) * r_scale_q8;
+                    int32_t rot_x_q8 = (rx_q8 * cos_q14 + ry_q8 * sin_q14) / 16384;
+                    int32_t rot_y_q8 = (-rx_q8 * sin_q14 + ry_q8 * cos_q14) / 16384;
+                    int32_t target_x_q8 = pns_x * 256 + rot_x_q8;
+                    int32_t target_y_q8 = pns_y * 256 + rot_y_q8;
+                    int32_t out_x_q8 = vx * 256 + ((target_x_q8 - vx * 256) * t_arm_q8) / 256;
+                    int32_t out_y_q8 = vy * 256 + ((target_y_q8 - vy * 256) * t_arm_q8) / 256;
+                    int32_t rx = (out_x_q8 >= 0) ? (out_x_q8 + 128) / 256 : -((-out_x_q8 + 128) / 256);
+                    int32_t ry = (out_y_q8 >= 0) ? (out_y_q8 + 128) / 256 : -((-out_y_q8 + 128) / 256);
+                    live_velum[i].x = (int16_t)rx;
+                    live_velum[i].y = (int16_t)ry;
+                }
+                nv_vec_poly(buf, w, h, live_velum, NV_NVELUM, strip_y, nv_col(NV_COL_WHITE, mono_mode));
             }
-            nv_vec_poly(buf, w, h, live_velum, NV_NVELUM, strip_y, nv_col(NV_COL_WHITE, mono_mode));
 
             /* H. 2D Formant Vowel Quadrant Crosshair Box */
             int32_t bx = 186, by = 28, bw = 48, bh = 48;
@@ -365,8 +451,8 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 if (a && a->state != SYLL_IDLE) {
                     if (i == 0) val = a->cur_tongue;
                     else if (i == 1) val = a->cur_jaw;
-                    else if (i == 2) val = clamp((a->cur_lips - 512) / 120, 0, 127);
-                    else if (i == 3) val = (a->cur_velum * 127) / 3276;
+                    else if (i == 2) val = clamp((a->cur_lips - 512 + 60) / 120, 0, 127);
+                    else if (i == 3) val = (a->cur_velum * 127 + 1638) / 3276;
                 }
                 fmt_int(val_str, val);
             } else if (mode_idx == NV_VIEW_TARGET) {
