@@ -405,7 +405,7 @@
 
       <div class="page-nav-row">
         <button class="btn active" id="btn-home">HOME</button>
-        <button class="btn" id="btn-edit">EDIT [1/3]</button>
+        <button class="btn" id="btn-edit">EDIT [1/4]</button>
         <button class="btn" id="btn-env">ENV [1/3]</button>
         <button class="btn" id="btn-fx">FX [1/2]</button>
         <button class="btn" id="btn-seq">SEQ [STEP]</button>
@@ -453,6 +453,11 @@
 const canvas = document.getElementById('lcd');
 const ctx = canvas.getContext('2d');
 
+const ONSET_NAMES = ["OFF", "h", "m", "r", "R-RET", "R-RHO", "s", "sh", "t", "p"];
+const CODA_NAMES  = ["OFF", "m", "n", "ng", "r", "R-RET", "s", "sh", "t", "p"];
+const MODE_NAMES  = ["GLIDE", "RETURN", "BOUNCE", "TOUCH"];
+const MODE_SHORT  = ["GLID", "RET", "BNC", "TCH"];
+
 // Engine State
 const state = {
   creature: 0, // 0: HUMAN, 1: TROLL, 2: ELF, 3: BEAST
@@ -462,12 +467,15 @@ const state = {
   playing: false,
   seqStep: 0,
   bpm: 110,
+  touchPressure: 64,
   // Live Articulator Values (0..127)
   p: {
     // MOUTH (Start)
     tongue: 64, jaw: 64, lips: 64, velum: 0,
     // END MOUTH (Target)
     end_tongue: 64, end_jaw: 64, end_lips: 64, end_velum: 0,
+    // PHONEMES
+    onset: 0, coda: 0,
     // GLOTTIS
     body: 20, choir: 32, touch: 64, voicing: 0,
     // ENV TIME
@@ -482,6 +490,8 @@ const state = {
   // Animated morph state
   morph: {
     phase: 0.0, // 0.0 to 1.0
+    dir: 1, // +1 (forward), -1 (return)
+    holdTimer: 0,
     active: false,
     curTongue: 64,
     curJaw: 64,
@@ -497,21 +507,21 @@ const state = {
 
 // Sentence Sequence: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW"
 const SENTENCE = [
-  { word: "NOI-", note: 57, tng: 80, jaw: 100, lip: 30, vel: 115, e_tng: 25, e_jaw: 85, e_lip: 80, e_vel: 0 },
+  { word: "NOI-", note: 57, onset: 2, coda: 0, tng: 80, jaw: 100, lip: 30, vel: 115, e_tng: 25, e_jaw: 85, e_lip: 80, e_vel: 0 },
   { word: "-CE",  note: 57, tie: true },
-  { word: "VOI-", note: 59, tng: 35, jaw: 95,  lip: 10, vel: 0,   e_tng: 25, e_jaw: 80, e_lip: 80, e_vel: 0 },
+  { word: "VOI-", note: 59, onset: 0, coda: 0, tng: 35, jaw: 95,  lip: 10, vel: 0,   e_tng: 25, e_jaw: 80, e_lip: 80, e_vel: 0 },
   { word: "-CE",  note: 59, tie: true },
-  { word: "CAN",  note: 60, tng: 110, jaw: 80, lip: 55, vel: 0,   e_tng: 75, e_jaw: 35, e_lip: 70, e_vel: 100 },
+  { word: "CAN",  note: 60, onset: 0, coda: 2, tng: 110, jaw: 80, lip: 55, vel: 0,   e_tng: 75, e_jaw: 35, e_lip: 70, e_vel: 100 },
   { word: "CAN",  note: 60, tie: true },
-  { word: "SPEAK",note: 62, tng: 70, jaw: 95,  lip: 60, vel: 0,   e_tng: 20, e_jaw: 90, e_lip: 90, e_vel: 0 },
+  { word: "SPEAK",note: 62, onset: 6, coda: 8, tng: 70, jaw: 95,  lip: 60, vel: 0,   e_tng: 20, e_jaw: 90, e_lip: 90, e_vel: 0 },
   { word: "SPEAK",note: 62, tie: true },
-  { word: "WORDS",note: 60, tng: 35, jaw: 75,  lip: 15, vel: 0,   e_tng: 60, e_jaw: 55, e_lip: 45, e_vel: 0 },
+  { word: "WORDS",note: 60, onset: 4, coda: 6, tng: 35, jaw: 75,  lip: 15, vel: 0,   e_tng: 60, e_jaw: 55, e_lip: 45, e_vel: 0 },
   { word: "WORDS",note: 60, tie: true },
-  { word: "TO",   note: 59, tng: 90, jaw: 95,  lip: 50, vel: 0,   e_tng: 35, e_jaw: 85, e_lip: 20, e_vel: 0 },
+  { word: "TO",   note: 59, onset: 8, coda: 0, tng: 90, jaw: 95,  lip: 50, vel: 0,   e_tng: 35, e_jaw: 85, e_lip: 20, e_vel: 0 },
   { word: "TO",   note: 59, tie: true },
-  { word: "YOU",  note: 57, tng: 20, jaw: 85,  lip: 75, vel: 0,   e_tng: 35, e_jaw: 80, e_lip: 18, e_vel: 0 },
+  { word: "YOU",  note: 57, onset: 0, coda: 0, tng: 20, jaw: 85,  lip: 75, vel: 0,   e_tng: 35, e_jaw: 80, e_lip: 18, e_vel: 0 },
   { word: "YOU",  note: 57, tie: true },
-  { word: "NOW",  note: 55, tng: 80, jaw: 95,  lip: 40, vel: 115, e_tng: 45, e_jaw: 30, e_lip: 25, e_vel: 0 },
+  { word: "NOW",  note: 55, onset: 2, coda: 0, tng: 80, jaw: 95,  lip: 40, vel: 115, e_tng: 45, e_jaw: 30, e_lip: 25, e_vel: 0 },
   { word: "NOW",  note: 55, tie: true }
 ];
 
@@ -519,9 +529,10 @@ const SENTENCE = [
 const PAGES = {
   HOME: [{ title: 'HOME', k: ['TONGUE', 'JAW', 'LIPS', 'VELUM'], ids: ['tongue', 'jaw', 'lips', 'velum'] }],
   EDIT: [
-    { title: 'MOUTH [1/3]', k: ['TONGUE', 'JAW', 'LIPS', 'VELUM'], ids: ['tongue', 'jaw', 'lips', 'velum'] },
-    { title: 'END MOUTH [2/3]', k: ['END TNG', 'END JAW', 'END LIP', 'END VEL'], ids: ['end_tongue', 'end_jaw', 'end_lips', 'end_velum'] },
-    { title: 'GLOTTIS [3/3]', k: ['BODY', 'CHOIR', 'TOUCH', 'VOICING'], ids: ['body', 'choir', 'touch', 'voicing'] }
+    { title: 'MOUTH [1/4]', k: ['TONGUE', 'JAW', 'LIPS', 'VELUM'], ids: ['tongue', 'jaw', 'lips', 'velum'] },
+    { title: 'END MOUTH [2/4]', k: ['END TNG', 'END JAW', 'END LIP', 'END VEL'], ids: ['end_tongue', 'end_jaw', 'end_lips', 'end_velum'] },
+    { title: 'PHONEMES [3/4]', k: ['ONSET', 'CODA', 'BODY', 'CHOIR'], ids: ['onset', 'coda', 'body', 'choir'] },
+    { title: 'GLOTTIS [4/4]', k: ['BODY', 'CHOIR', 'TOUCH', 'VOICING'], ids: ['body', 'choir', 'touch', 'voicing'] }
   ],
   ENV: [
     { title: 'ENV TIME [1/3]', k: ['SPEED', 'HOLD', 'RETURN', 'MODE'], ids: ['speed', 'hold', 'ret', 'mode'] },
@@ -529,7 +540,7 @@ const PAGES = {
     { title: 'BREATH [3/3]', k: ['ATTACK', 'RELEASE', 'TENSION', 'BREATH'], ids: ['atk', 'rel', 'tension', 'breath'] }
   ],
   FX: [
-    { title: 'RESONANCE [1/2]', k: ['WALL Q', 'TRACT LEN', 'TRACHEA', 'NASAL Q'], ids: ['wall_q', 'tract_len', 'trachea', 'nasal_q'] },
+    { title: 'RESONANCE [1/2]', k: ['WALL Q', 'LENGTH', 'TRACHEA', 'NASAL Q'], ids: ['wall_q', 'tract_len', 'trachea', 'nasal_q'] },
     { title: 'SPACE [2/2]', k: ['GROWL', 'CHORUS', 'DELAY', 'REVERB'], ids: ['growl', 'chorus', 'delay', 'reverb'] }
   ],
   SEQ: [{ title: 'STEP [1/1]', k: ['LEN', 'DIV', 'SWING', 'GATE'], ids: ['speed', 'hold', 'ret', 'mode'] }],
@@ -568,11 +579,14 @@ function processAudio(e) {
   const isSounding = state.noteActive || state.p.voicing > 64;
   const f0 = state.currentFreq;
   const dt = f0 / sr;
-  const tractScale = 0.8 + (state.p.tract_len / 127) * 0.4;
-  const wallLoss = 0.985 - (state.p.wall_q / 127) * 0.015;
+  const wallLoss = 0.985 - (state.p.wall_q / 127) * 0.018;
   const velumOpen = state.morph.curVelum / 127;
   const lipOpen = state.morph.curLips / 127;
   const growlAmt = state.p.growl / 127;
+
+  const isOnsetRetroflex = (state.p.onset === 4); // R-RET [ɻ]
+  const isOnsetFricative = (state.p.onset === 6 || state.p.onset === 7 || state.p.onset === 1); // s, sh, h
+  const isOnsetStop = (state.p.onset === 8 || state.p.onset === 9); // t, p
 
   for (let i = 0; i < n; i++) {
     let excitation = 0;
@@ -604,13 +618,31 @@ function processAudio(e) {
 
     for (let j = 0; j < 43; j++) {
       let r = 0.05;
-      if (j === 20) { // Tongue hump constriction
+      if (isOnsetRetroflex) {
+        // Retroflex [ɻ]: section 15 constriction, section 18 sublingual expansion
+        if (j === 15) r = 0.65;
+        else if (j === 18) r = -0.3;
+        else if (j === 6) r = 0.35;
+        else {
+          const tPos = state.morph.curTongue / 127;
+          r = (tPos - 0.5) * 0.4;
+        }
+      } else if (j === 20) { // Tongue hump constriction
         const tPos = state.morph.curTongue / 127;
         r = (tPos - 0.5) * 0.6;
       } else if (j === 42) { // Lip aperture
         r = 0.8 - lipOpen * 0.7;
       }
       
+      // Consonant aerodynamic turbulence injection
+      if (state.morph.phase < 0.25 && isSounding) {
+        if (isOnsetFricative && (j === 20 || j === 15)) {
+          waveguideR[j] += (Math.random() * 2 - 1) * 0.15;
+        } else if (isOnsetStop && (j === 22 || j === 42) && state.morph.phase < 0.08) {
+          waveguideR[j] += (Math.random() * 2 - 1) * 0.22;
+        }
+      }
+
       const fwd = waveguideR[j];
       const rev = waveguideL[j + 1];
       waveguideR[j + 1] = (fwd * (1 - r) + rev * r) * wallLoss;
@@ -682,7 +714,6 @@ function stepSequencer() {
   const stepData = SENTENCE[state.seqStep];
   if (stepData) {
     if (!stepData.tie) {
-      // Trigger new word syllable
       triggerSyllable(stepData);
     }
   }
@@ -710,8 +741,14 @@ function triggerSyllable(d) {
   state.p.end_lips = d.e_lip;
   state.p.end_velum = d.e_vel;
 
-  // Start Articulatory Morph
+  // Set Phonemes
+  state.p.onset = d.onset || 0;
+  state.p.coda = d.coda || 0;
+
+  // Reset Articulatory Morph
   state.morph.phase = 0.0;
+  state.morph.dir = 1;
+  state.morph.holdTimer = 0;
   state.morph.active = true;
   updateKnobDisplays();
 }
@@ -720,9 +757,18 @@ function triggerReSpeak() {
   initAudio();
   state.noteActive = true;
   state.morph.phase = 0.0;
+  state.morph.dir = 1;
+  state.morph.holdTimer = 0;
   state.morph.active = true;
   setTimeout(() => {
-    if (!state.playing) state.noteActive = false;
+    if (!state.playing) {
+      const morphMode = Math.floor((state.p.mode / 127) * 3.99);
+      if (morphMode === 1) {
+        state.morph.dir = -1;
+      } else {
+        state.noteActive = false;
+      }
+    }
   }, 400);
 }
 
@@ -731,18 +777,63 @@ function drawLCD() {
   ctx.fillStyle = '#090d12';
   ctx.fillRect(0, 0, 240, 240);
 
-  // Update morph interpolation
+  // Envelope State Machine & Morph Mechanics
+  const morphMode = Math.floor((state.p.mode / 127) * 3.99); // 0: GLIDE, 1: RETURN, 2: BOUNCE, 3: TOUCH
+  const spd = Math.max(0.01, (state.p.speed / 127)) * 0.08 + 0.005;
+  const retSpd = Math.max(0.01, (state.p.ret / 127)) * 0.08 + 0.005;
+
   if (state.morph.active) {
-    const spd = (state.p.speed / 127) * 0.06 + 0.02;
-    state.morph.phase += spd;
-    if (state.morph.phase >= 1.0) {
-      state.morph.phase = 1.0;
-      if (!state.playing) state.morph.active = false;
+    if (morphMode === 0) { // GLIDE
+      state.morph.phase += spd;
+      if (state.morph.phase >= 1.0) {
+        state.morph.phase = 1.0;
+        if (!state.playing && !state.noteActive) state.morph.active = false;
+      }
+    } else if (morphMode === 1) { // RETURN
+      if (state.morph.dir > 0) {
+        state.morph.phase += spd;
+        if (state.morph.phase >= 1.0) {
+          state.morph.phase = 1.0;
+          state.morph.holdTimer++;
+          const holdLimit = Math.floor((state.p.hold / 127) * 45);
+          if (state.morph.holdTimer > holdLimit && !state.noteActive && !state.playing) {
+            state.morph.dir = -1;
+          }
+        }
+      } else {
+        state.morph.phase -= retSpd;
+        if (state.morph.phase <= 0.0) {
+          state.morph.phase = 0.0;
+          state.morph.dir = 1;
+          state.morph.holdTimer = 0;
+          state.morph.active = false;
+        }
+      }
+    } else if (morphMode === 2) { // BOUNCE (ping-pong syllable cycle)
+      if (state.morph.dir > 0) {
+        state.morph.phase += spd;
+        if (state.morph.phase >= 1.0) {
+          state.morph.phase = 1.0;
+          state.morph.dir = -1;
+        }
+      } else {
+        state.morph.phase -= retSpd;
+        if (state.morph.phase <= 0.0) {
+          state.morph.phase = 0.0;
+          state.morph.dir = 1;
+        }
+      }
+    } else if (morphMode === 3) { // TOUCH
+      const touchTarget = (state.touchPressure / 127);
+      state.morph.phase += (touchTarget - state.morph.phase) * 0.2;
     }
   }
 
-  const isEndMouth = (state.pageFam === 'EDIT' && state.pageIndex === 1) || (state.pageFam === 'ENV' && state.pageIndex === 1);
   const isStartMouth = (state.pageFam === 'HOME') || (state.pageFam === 'EDIT' && state.pageIndex === 0);
+  const isTargetMouth = (state.pageFam === 'EDIT' && state.pageIndex === 1) || (state.pageFam === 'ENV' && state.pageIndex === 1);
+  const isPhonemesMode = (state.pageFam === 'EDIT' && state.pageIndex === 2);
+  const isEnvMode = (state.pageFam === 'ENV' && state.pageIndex === 0);
+  const isResonanceMode = (state.pageFam === 'FX' && state.pageIndex === 0);
 
   // Smooth interpolation from Start to End Shape
   const ph = state.morph.phase;
@@ -751,30 +842,36 @@ function drawLCD() {
     state.morph.curJaw = state.p.jaw + (state.p.end_jaw - state.p.jaw) * ph;
     state.morph.curLips = state.p.lips + (state.p.end_lips - state.p.lips) * ph;
     state.morph.curVelum = state.p.velum + (state.p.end_velum - state.p.velum) * ph;
-  } else if (isEndMouth) {
-    // When editing envelope mouth shape while idle, visual tool displays Target Shape!
+  } else if (isTargetMouth) {
     state.morph.curTongue = state.p.end_tongue;
     state.morph.curJaw = state.p.end_jaw;
     state.morph.curLips = state.p.end_lips;
     state.morph.curVelum = state.p.end_velum;
   } else {
-    // When editing main mouth shape while idle, visual tool displays Start Shape!
     state.morph.curTongue = state.p.tongue;
     state.morph.curJaw = state.p.jaw;
     state.morph.curLips = state.p.lips;
     state.morph.curVelum = state.p.velum;
   }
 
-  // Draw Top Banner (Creature Name & Syllable Morph)
+  // Draw Top Banner
   const cNames = ['HUMAN', 'TROLL', 'ELF', 'BEAST'];
-  ctx.fillStyle = isEndMouth ? '#f472b6' : '#38bdf8';
+  const bannerCol = isTargetMouth ? '#f472b6' : (isResonanceMode ? '#38bdf8' : (isPhonemesMode || isEnvMode ? '#f472b6' : '#38bdf8'));
+  ctx.fillStyle = bannerCol;
   ctx.font = 'bold 9px monospace';
   ctx.fillText(cNames[state.creature], 8, 14);
 
-  ctx.fillStyle = isEndMouth ? '#f472b6' : '#38bdf8';
-  ctx.font = 'bold 10px monospace';
-  const bannerText = isEndMouth ? (state.morph.active ? state.wordBanner : '[END SHAPE]') : state.wordBanner;
-  ctx.fillText(bannerText, 62, 15);
+  let bannerText = state.wordBanner;
+  if (isTargetMouth) {
+    bannerText = state.morph.active ? state.wordBanner : '[END SHAPE]';
+  } else if (isEnvMode) {
+    bannerText = `[${MODE_NAMES[morphMode]}]`;
+  } else if (isResonanceMode) {
+    bannerText = '[RESONANCE]';
+  } else if (isPhonemesMode) {
+    bannerText = `[${ONSET_NAMES[state.p.onset]} -> ${CODA_NAMES[state.p.coda]}]`;
+  }
+  ctx.fillText(bannerText, 60, 15);
 
   // Morph Progress Bar
   ctx.fillStyle = '#1e293b';
@@ -784,14 +881,15 @@ function drawLCD() {
   ctx.strokeStyle = '#334155';
   ctx.strokeRect(150, 8, 80, 8);
 
-  // Mid-Sagittal Vocal Tract Geometry
+  // Mid-Sagittal Vocal Tract Geometry with Dynamic Physical Scaling
+  const tractScale = 0.85 + (state.p.tract_len / 127) * 0.3;
   const ox = 75, oy = 95;
-  const jawDrop = (state.morph.curJaw / 127) * 22;
-  const tngArch = (state.morph.curTongue / 127) * 28;
-  const lipExt = (state.morph.curLips / 127) * 16;
+  const jawDrop = ((state.morph.curJaw / 127) * 22) * tractScale;
+  const tngArch = ((state.morph.curTongue / 127) * 28) * tractScale;
+  const lipExt = ((state.morph.curLips / 127) * 16) * tractScale;
   const velOpen = (state.morph.curVelum / 127) * 14;
 
-  // 1. Skull Base & Nasal Cavity (Bone Gray)
+  // 1. Skull Base & Pharyngeal Cavity (Bone Gray)
   ctx.strokeStyle = '#64748b';
   ctx.lineWidth = 2.5;
   ctx.beginPath();
@@ -802,44 +900,126 @@ function drawLCD() {
   ctx.lineTo(ox + 60, oy - 35); // Upper maxilla
   ctx.stroke();
 
+  // Wall Q Tissue Damping Contour (in RESONANCE view)
+  if (isResonanceMode && state.p.wall_q > 15) {
+    const wAlpha = (state.p.wall_q / 127);
+    ctx.strokeStyle = `rgba(56, 189, 248, ${wAlpha})`;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath();
+    ctx.moveTo(ox - 40, oy + 45);
+    ctx.lineTo(ox - 40, oy - 22);
+    ctx.quadraticCurveTo(ox - 35, oy - 60, ox + 10, oy - 60);
+    ctx.lineTo(ox + 53, oy - 60);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Subglottal Trachea Cartilage Rings (below glottis)
+  const trachAmt = state.p.trachea / 127;
+  const trAlpha = isResonanceMode ? (0.4 + trachAmt * 0.6) : (0.15 + trachAmt * 0.35);
+  ctx.strokeStyle = `rgba(248, 113, 113, ${trAlpha})`;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(ox - 35, oy + 45); ctx.lineTo(ox - 35, oy + 76);
+  ctx.moveTo(ox - 20, oy + 45); ctx.lineTo(ox - 20, oy + 76);
+  ctx.stroke();
+  for (let ty = oy + 50; ty <= oy + 74; ty += 6) {
+    ctx.beginPath();
+    ctx.moveTo(ox - 35, ty);
+    ctx.lineTo(ox - 20, ty);
+    ctx.stroke();
+  }
+
   // Hard Palate & Nasal Floor
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
   ctx.moveTo(ox - 5, oy - 25);
   ctx.quadraticCurveTo(ox + 25, oy - 25, ox + 55, oy - 20);
   ctx.stroke();
 
-  // Velum (Soft Palate Gate)
+  // Upper Nasal Cavity Branch & Turbinate Rungs
+  const nasAmt = state.p.nasal_q / 127;
+  const nasAlpha = isResonanceMode ? (0.4 + nasAmt * 0.6) : (0.2 + (velOpen > 2 ? 0.4 : 0.1));
+  ctx.strokeStyle = `rgba(56, 189, 248, ${nasAlpha})`;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.moveTo(ox - 15, oy - 25);
+  ctx.quadraticCurveTo(ox + 15, oy - 48, ox + 50, oy - 42);
+  ctx.lineTo(ox + 55, oy - 20);
+  ctx.stroke();
+  for (let nx = ox; nx <= ox + 40; nx += 10) {
+    ctx.beginPath();
+    ctx.moveTo(nx, oy - 40);
+    ctx.lineTo(nx + 3, oy - 27);
+    ctx.stroke();
+  }
+
+  // Velum (Soft Palate Port)
   ctx.strokeStyle = velOpen > 2 ? '#38bdf8' : '#e2e8f0';
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(ox - 5, oy - 25);
-  ctx.lineTo(ox - 18, oy - 20 + velOpen); // Swings down to open nasal airway
+  ctx.lineTo(ox - 18, oy - 20 + velOpen);
   ctx.stroke();
 
-  if (velOpen > 4) {
-    // Nasal Airflow indicator
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
-    ctx.beginPath();
-    ctx.arc(ox + 20, oy - 40, 8, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // 2. Tongue Spline (Muscular Coral)
+  // 2. Muscular Tongue with Retroflex [ɻ] Curl Support
+  const isRetroflex = (isPhonemesMode && state.p.onset === 4) || (state.morph.active && state.p.onset === 4);
   ctx.strokeStyle = '#f87171';
   ctx.fillStyle = 'rgba(248, 113, 113, 0.25)';
   ctx.lineWidth = 3.5;
   ctx.beginPath();
   ctx.moveTo(ox - 25, oy + 40); // Tongue root
-  ctx.bezierCurveTo(
-    ox - 20, oy + 10 - tngArch * 0.5,
-    ox - 5 + (state.morph.curTongue - 64) * 0.3, oy - 15 - tngArch,
-    ox + 35, oy - 10 + jawDrop * 0.3 // Tongue blade
-  );
-  ctx.lineTo(ox + 45, oy - 5 + jawDrop * 0.5); // Tip
-  ctx.lineTo(ox + 30, oy + 25 + jawDrop); // Lower floor
+  if (isRetroflex) {
+    // Retroflex curled tongue tip pointing up and backwards towards hard palate
+    ctx.bezierCurveTo(
+      ox - 20, oy + 15,
+      ox - 5, oy - 12,
+      ox + 18, oy - 26
+    );
+    ctx.quadraticCurveTo(ox + 26, oy - 34, ox + 20, oy - 37); // Curled tip
+    ctx.lineTo(ox + 14, oy - 24);
+    ctx.lineTo(ox + 25, oy + 25 + jawDrop);
+  } else {
+    ctx.bezierCurveTo(
+      ox - 20, oy + 10 - tngArch * 0.5,
+      ox - 5 + (state.morph.curTongue - 64) * 0.3, oy - 15 - tngArch,
+      ox + 35, oy - 10 + jawDrop * 0.3
+    );
+    ctx.lineTo(ox + 45, oy - 5 + jawDrop * 0.5); // Tip
+    ctx.lineTo(ox + 30, oy + 25 + jawDrop); // Lower floor
+  }
   ctx.closePath();
   ctx.fill();
   ctx.stroke();
+
+  // Active Phoneme Constriction Crosshair Marker
+  if (isPhonemesMode && state.p.onset > 0) {
+    const cSites = [
+      { x: ox, y: oy }, // 0: OFF
+      { x: ox - 28, y: oy + 35 }, // 1: h (glottis)
+      { x: ox + 65, y: oy - 10 + jawDrop * 0.5 }, // 2: m (bilabial)
+      { x: ox + 22, y: oy - 24 }, // 3: r (postalveolar)
+      { x: ox + 20, y: oy - 35 }, // 4: R-RET (retroflex curled palate)
+      { x: ox + 5,  y: oy - 20 }, // 5: R-RHO (rhotic bunched)
+      { x: ox + 38, y: oy - 22 }, // 6: s (alveolar ridge)
+      { x: ox + 25, y: oy - 24 }, // 7: sh (postalveolar)
+      { x: ox + 42, y: oy - 22 }, // 8: t (alveolar stop)
+      { x: ox + 68, y: oy - 10 + jawDrop * 0.5 } // 9: p (bilabial burst)
+    ];
+    const pos = cSites[state.p.onset] || cSites[0];
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(pos.x - 5, pos.y); ctx.lineTo(pos.x + 5, pos.y);
+    ctx.moveTo(pos.x, pos.y - 5); ctx.lineTo(pos.x, pos.y + 5);
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(251, 191, 36, 0.3)';
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, 6 + Math.sin(Date.now() * 0.01) * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // 3. Lower Mandible & Jaw
   ctx.strokeStyle = '#94a3b8';
@@ -859,13 +1039,13 @@ function drawLCD() {
   ctx.moveTo(ox + 56, oy - 20);
   ctx.lineTo(ox + 68 + lipExt * 0.3, oy - 18);
   ctx.stroke();
-  // Lower Lip (drops with jaw)
+  // Lower Lip
   ctx.beginPath();
   ctx.moveTo(ox + 48, oy + 2 + jawDrop);
   ctx.lineTo(ox + 65 + lipExt * 0.3, oy - 3 + jawDrop);
   ctx.stroke();
 
-  // 5. Radiating Sound Waves from Mouth (when note active)
+  // 5. Radiating Sound Waves from Mouth
   if (state.noteActive || state.p.voicing > 64) {
     const p = state.morph.mouthAcousticPulse;
     ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 + p * 1.5})`;
@@ -891,7 +1071,25 @@ function drawLCD() {
   ctx.fillText('[u]', qx + qw - 16, qy + 12);
   ctx.fillText('[a]', qx + qw / 2 - 6, qy + qh - 4);
 
-  // Crosshair tracking dot
+  // Trajectory vector line in ENV mode
+  if (isEnvMode) {
+    const sx = qx + (state.p.tongue / 127) * (qw - 10) + 5;
+    const sy = qy + (state.p.jaw / 127) * (qh - 10) + 5;
+    const ex = qx + (state.p.end_tongue / 127) * (qw - 10) + 5;
+    const ey = qy + (state.p.end_jaw / 127) * (qh - 10) + 5;
+    ctx.strokeStyle = '#f472b6';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.fillStyle = '#38bdf8';
+    ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#f472b6';
+    ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Tracking dot
   const vx = qx + (state.morph.curTongue / 127) * (qw - 10) + 5;
   const vy = qy + (state.morph.curJaw / 127) * (qh - 10) + 5;
   ctx.fillStyle = '#38bdf8';
@@ -913,16 +1111,32 @@ function drawLCD() {
     ctx.font = 'bold 8px monospace';
     ctx.fillText(activePage.k[c], cardX + 4, cy + 12);
 
-    const val = state.p[activePage.ids[c]];
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = 'bold 12px monospace';
-    ctx.fillText(val + (activePage.ids[c].includes('mode') ? '' : '%'), cardX + 8, cy + 32);
+    const id = activePage.ids[c];
+    const val = state.p[id];
+    let dispVal = `${val}%`;
+    let normGauge = val / 127;
+
+    if (id === 'mode') {
+      const m = Math.floor((val / 127) * 3.99);
+      dispVal = MODE_SHORT[m];
+      normGauge = (m + 0.5) / 4;
+    } else if (id === 'onset') {
+      dispVal = ONSET_NAMES[val] || 'OFF';
+      normGauge = val / (ONSET_NAMES.length - 1);
+    } else if (id === 'coda') {
+      dispVal = CODA_NAMES[val] || 'OFF';
+      normGauge = val / (CODA_NAMES.length - 1);
+    }
+
+    ctx.fillStyle = (id === 'mode' || id === 'onset' || id === 'coda') ? '#f472b6' : '#38bdf8';
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(dispVal, cardX + 6, cy + 32);
 
     // Value mini gauge arc
-    ctx.strokeStyle = '#38bdf8';
+    ctx.strokeStyle = ctx.fillStyle;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(cardX + 28, cy + 45, 7, Math.PI * 0.8, Math.PI * 0.8 + (val / 127) * Math.PI * 1.4);
+    ctx.arc(cardX + 28, cy + 45, 7, Math.PI * 0.8, Math.PI * 0.8 + normGauge * Math.PI * 1.4);
     ctx.stroke();
   }
 
@@ -940,10 +1154,30 @@ function updateKnobDisplays() {
     const val = state.p[id];
     
     lbl.textContent = activePage.k[c];
-    sub.textContent = val + '%';
-    const deg = -135 + (val / 127) * 270;
+    let textVal = `${val}%`;
+    let degFrac = val / 127;
+
+    if (id === 'mode') {
+      const m = Math.floor((val / 127) * 3.99);
+      textVal = MODE_NAMES[m];
+      degFrac = m / 3;
+    } else if (id === 'onset') {
+      textVal = ONSET_NAMES[val] || 'OFF';
+      degFrac = val / (ONSET_NAMES.length - 1);
+    } else if (id === 'coda') {
+      textVal = CODA_NAMES[val] || 'OFF';
+      degFrac = val / (CODA_NAMES.length - 1);
+    }
+
+    sub.textContent = textVal;
+    const deg = -135 + degFrac * 270;
     ptr.style.transform = `rotate(${deg}deg)`;
   }
+
+  // Update Page Button Badges
+  document.getElementById('btn-edit').textContent = `EDIT [${(state.pageFam === 'EDIT' ? state.pageIndex : 0) + 1}/${PAGES.EDIT.length}]`;
+  document.getElementById('btn-env').textContent = `ENV [${(state.pageFam === 'ENV' ? state.pageIndex : 0) + 1}/${PAGES.ENV.length}]`;
+  document.getElementById('btn-fx').textContent = `FX [${(state.pageFam === 'FX' ? state.pageIndex : 0) + 1}/${PAGES.FX.length}]`;
 }
 
 // Knob Drag Interaction
@@ -958,7 +1192,18 @@ document.querySelectorAll('.knob-dial').forEach(dial => {
 
     function onMove(me) {
       const dy = startY - me.clientY;
-      const newVal = Math.max(0, Math.min(127, Math.round(startVal + dy * 0.8)));
+      let newVal;
+      if (paramId === 'onset') {
+        newVal = Math.max(0, Math.min(ONSET_NAMES.length - 1, Math.round(startVal + dy * 0.1)));
+      } else if (paramId === 'coda') {
+        newVal = Math.max(0, Math.min(CODA_NAMES.length - 1, Math.round(startVal + dy * 0.1)));
+      } else if (paramId === 'mode') {
+        const curM = Math.floor((startVal / 127) * 3.99);
+        const newM = Math.max(0, Math.min(3, Math.round(curM + dy * 0.05)));
+        newVal = Math.round((newM / 3) * 127);
+      } else {
+        newVal = Math.max(0, Math.min(127, Math.round(startVal + dy * 0.8)));
+      }
       state.p[paramId] = newVal;
       updateKnobDisplays();
     }
@@ -987,7 +1232,6 @@ navBtns.forEach(b => {
   const el = document.getElementById(b.id);
   el.addEventListener('click', () => {
     if (state.pageFam === b.fam) {
-      // Cycle pages inside family
       state.pageIndex = (state.pageIndex + 1) % PAGES[b.fam].length;
     } else {
       state.pageFam = b.fam;
@@ -1034,19 +1278,19 @@ document.getElementById('btn-octup').addEventListener('click', () => {
 const whiteKeysContainer = document.getElementById('white-keys');
 const blackKeysContainer = document.getElementById('black-keys');
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const whiteNotes = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74]; // 16 white keys (C3 to D5)
+const whiteNotes = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74];
 const blackNotes = [
-  { note: 49, left: 4.8 },  // C#3
-  { note: 51, left: 11.0 }, // D#3
-  { note: 54, left: 23.5 }, // F#3
-  { note: 56, left: 29.8 }, // G#3
-  { note: 58, left: 36.0 }, // A#3
-  { note: 61, left: 48.5 }, // C#4
-  { note: 63, left: 54.8 }, // D#4
-  { note: 66, left: 67.2 }, // F#4
-  { note: 68, left: 73.5 }, // G#4
-  { note: 70, left: 79.8 }, // A#4
-  { note: 73, left: 92.2 }  // C#5
+  { note: 49, left: 4.8 },
+  { note: 51, left: 11.0 },
+  { note: 54, left: 23.5 },
+  { note: 56, left: 29.8 },
+  { note: 58, left: 36.0 },
+  { note: 61, left: 48.5 },
+  { note: 63, left: 54.8 },
+  { note: 66, left: 67.2 },
+  { note: 68, left: 73.5 },
+  { note: 70, left: 79.8 },
+  { note: 73, left: 92.2 }
 ];
 
 whiteNotes.forEach((midi, idx) => {
@@ -1057,7 +1301,7 @@ whiteNotes.forEach((midi, idx) => {
     <div class="step-led" id="step-led-${idx}"></div>
     <span>${NOTE_NAMES[midi % 12]}</span>
   `;
-  el.addEventListener('mousedown', () => noteOn(midi));
+  el.addEventListener('mousedown', () => noteOn(midi, 105));
   el.addEventListener('mouseup', () => noteOff(midi));
   el.addEventListener('mouseleave', () => noteOff(midi));
   whiteKeysContainer.appendChild(el);
@@ -1069,18 +1313,21 @@ blackNotes.forEach(b => {
   el.id = `key-${b.note}`;
   el.style.left = `${b.left}%`;
   el.textContent = NOTE_NAMES[b.note % 12];
-  el.addEventListener('mousedown', () => noteOn(b.note));
+  el.addEventListener('mousedown', () => noteOn(b.note, 105));
   el.addEventListener('mouseup', () => noteOff(b.note));
   el.addEventListener('mouseleave', () => noteOff(b.note));
   blackKeysContainer.appendChild(el);
 });
 
-function noteOn(midi) {
+function noteOn(midi, velocity = 100) {
   initAudio();
   const freq = 440 * Math.pow(2, (midi + state.octave * 12 - 69) / 12);
   state.currentFreq = freq;
   state.noteActive = true;
+  state.touchPressure = velocity;
   state.morph.phase = 0.0;
+  state.morph.dir = 1;
+  state.morph.holdTimer = 0;
   state.morph.active = true;
   const k = document.getElementById(`key-${midi}`);
   if (k) k.classList.add('active');
@@ -1089,6 +1336,10 @@ function noteOn(midi) {
 function noteOff(midi) {
   if (!state.playing) {
     state.noteActive = false;
+    const morphMode = Math.floor((state.p.mode / 127) * 3.99);
+    if (morphMode === 1) { // RETURN mode smoothly glides back on key release
+      state.morph.dir = -1;
+    }
   }
   const k = document.getElementById(`key-${midi}`);
   if (k) k.classList.remove('active');
@@ -1116,7 +1367,7 @@ const KEY_MAP = {
 };
 window.addEventListener('keydown', (e) => {
   if (KEY_MAP[e.code] && !e.repeat) {
-    noteOn(KEY_MAP[e.code]);
+    noteOn(KEY_MAP[e.code], 110);
   } else if (e.code === 'Space') {
     e.preventDefault();
     togglePlay();

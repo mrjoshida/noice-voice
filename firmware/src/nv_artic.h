@@ -10,6 +10,16 @@
 #define NV_PHARYNX  8u
 #define NV_ORAL     14u
 
+static const char *const NV_ONSET_DISP[] = {
+    "OFF", "h", "m", "n", "b", "d", "g", "l", "w", "j",
+    "r", "s", "sh", "f", "v", "z", "k", "R-RET", "R-RHO", "t", "p", 0
+};
+
+static const char *const NV_CODA_DISP[] = {
+    "OFF", "m", "n", "ng", "l", "h", "s", "i", "u", "schwa",
+    "d", "R-RET", "R-RHO", "t", "p", 0
+};
+
 typedef enum {
     SYLL_IDLE = 0,
     SYLL_ONSET,

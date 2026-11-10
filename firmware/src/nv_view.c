@@ -6,7 +6,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                           const nv_artic_t *a, const int32_t *areas,
                           const int32_t *pres, uint32_t n_sections,
                           const int16_t *params, const char *msg,
-                          int is_target)
+                          uint8_t view_mode)
 {
     int32_t w = 240, h = strip_h;
     uint32_t i;
@@ -35,8 +35,45 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
         /* A. Cranium / Skull (creature outline) */
         nv_vec_poly(buf, w, h, NV_SKULL, NV_NSKULL, strip_y, NV_SWAP16(skull_col));
 
+        /* In RESONANCE: Wall Q tissue damping contour */
+        if (view_mode == NV_VIEW_RESONANCE && params) {
+            int32_t wall_q = params[P_WALL_Q];
+            if (wall_q > 20) {
+                uint16_t wcol = NV_SWAP16(NV_COL_CYAN);
+                for (i = 0; i < NV_NSKULL - 1; i += 2) {
+                    int32_t sx = (int32_t)NV_SKULL[i].x - 2;
+                    int32_t sy = (int32_t)NV_SKULL[i].y - strip_y;
+                    int32_t ex = (int32_t)NV_SKULL[i + 1].x - 2;
+                    int32_t ey = (int32_t)NV_SKULL[i + 1].y - strip_y;
+                    nv_vec_line(buf, w, h, sx, sy, ex, ey, wcol);
+                }
+            }
+        }
+
         /* B. Palate / Hard roof of mouth (white outline) */
         nv_vec_poly(buf, w, h, NV_PALATE, NV_NPALATE, strip_y, NV_SWAP16(NV_COL_WHITE));
+
+        /* In RESONANCE: Subglottal Trachea & Upper Nasal Cavity */
+        if (view_mode == NV_VIEW_RESONANCE && params) {
+            /* Trachea cartilage rings below glottis */
+            int32_t trach = params[P_TRACHEA];
+            uint16_t tr_col = trach > 0 ? NV_SWAP16(NV_COL_CORAL) : NV_SWAP16(NV_COL_DIM_AMB);
+            for (int32_t ty = 162; ty <= 178; ty += 5) {
+                nv_vec_line(buf, w, h, 34, ty - strip_y, 48, ty - strip_y, tr_col);
+            }
+            nv_vec_line(buf, w, h, 34, 155 - strip_y, 34, 180 - strip_y, tr_col);
+            nv_vec_line(buf, w, h, 48, 155 - strip_y, 48, 180 - strip_y, tr_col);
+
+            /* Nasal cavity branch */
+            int32_t nas_q = params[P_NASAL_Q];
+            uint16_t nas_col = nas_q > 0 ? NV_SWAP16(NV_COL_WHITE) : NV_SWAP16(NV_COL_DIM_AMB);
+            nv_vec_line(buf, w, h, 65, 75 - strip_y, 90, 68 - strip_y, nas_col);
+            nv_vec_line(buf, w, h, 90, 68 - strip_y, 120, 72 - strip_y, nas_col);
+            nv_vec_line(buf, w, h, 120, 72 - strip_y, 135, 95 - strip_y, nas_col);
+            for (int32_t nx = 76; nx <= 116; nx += 10) {
+                nv_vec_line(buf, w, h, nx, 71 - strip_y, nx + 3, 80 - strip_y, nas_col);
+            }
+        }
 
         /* C. Amber Waveguide Pressure Rungs */
         if (pres && n_sections) {
@@ -61,14 +98,15 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             int32_t ty = ((int32_t)a->cur_jaw * 512) / 127;
             uint32_t ix = (uint32_t)(tx >> 8), fx = (uint32_t)(tx & 255);
             uint32_t iy = (uint32_t)(ty >> 8), fy = (uint32_t)(ty & 255);
+
             if (ix > 1u) { ix = 1u; fx = 256u; }
             if (iy > 1u) { iy = 1u; fy = 256u; }
 
             for (i = 0; i < NV_NTONGUE; i++) {
-                int32_t p00_x = (int32_t)NV_TONGUE[iy][ix][i].x,         p00_y = (int32_t)NV_TONGUE[iy][ix][i].y;
-                int32_t p01_x = (int32_t)NV_TONGUE[iy][ix + 1u][i].x,    p01_y = (int32_t)NV_TONGUE[iy][ix + 1u][i].y;
-                int32_t p10_x = (int32_t)NV_TONGUE[iy + 1u][ix][i].x,    p10_y = (int32_t)NV_TONGUE[iy + 1u][ix][i].y;
-                int32_t p11_x = (int32_t)NV_TONGUE[iy + 1u][ix + 1u][i].x,p11_y = (int32_t)NV_TONGUE[iy + 1u][ix + 1u][i].y;
+                int32_t p00_x = NV_TONGUE[iy][ix][i].x,       p00_y = NV_TONGUE[iy][ix][i].y;
+                int32_t p01_x = NV_TONGUE[iy][ix + 1u][i].x,  p01_y = NV_TONGUE[iy][ix + 1u][i].y;
+                int32_t p10_x = NV_TONGUE[iy + 1u][ix][i].x,  p10_y = NV_TONGUE[iy + 1u][ix][i].y;
+                int32_t p11_x = NV_TONGUE[iy + 1u][ix + 1u][i].x, p11_y = NV_TONGUE[iy + 1u][ix + 1u][i].y;
 
                 int32_t top_x = p00_x + (((p01_x - p00_x) * (int32_t)fx) >> 8);
                 int32_t top_y = p00_y + (((p01_y - p00_y) * (int32_t)fx) >> 8);
@@ -79,120 +117,84 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 live_tongue[i].y = (int16_t)(top_y + (((bot_y - top_y) * (int32_t)fy) >> 8));
             }
             nv_vec_poly(buf, w, h, live_tongue, NV_NTONGUE, strip_y, NV_SWAP16(NV_COL_GREEN));
-        }
 
-        /* E. Live Jaw bone (coral outline) */
-        if (a) {
+            /* Highlight consonant constriction in PHONEMES mode */
+            if (view_mode == NV_VIEW_PHONEMES && params && params[P_E5] > 0 && params[P_E5] <= NV_NONSETS) {
+                uint32_t cs = NV_ONSETS[params[P_E5] - 1u].constr_sec;
+                uint32_t r_idx = (cs * NV_NRAYS) / NV_SECTIONS;
+                if (r_idx < NV_NRAYS) {
+                    int32_t cx = ((int32_t)NV_RAYS[r_idx].inner.x + (int32_t)NV_RAYS[r_idx].outer.x) / 2;
+                    int32_t cy = ((int32_t)NV_RAYS[r_idx].inner.y + (int32_t)NV_RAYS[r_idx].outer.y) / 2 - strip_y;
+                    nv_vec_line(buf, w, h, cx - 4, cy, cx + 4, cy, NV_SWAP16(NV_COL_AMBER));
+                    nv_vec_line(buf, w, h, cx, cy - 4, cx, cy + 4, NV_SWAP16(NV_COL_AMBER));
+                }
+            }
+
+            /* E. Jaw Bone (coral line) */
+            int32_t jaw_drop = ((int32_t)a->cur_jaw * 18) / 127;
             nv_pt_t live_jaw[NV_NJAW];
-            int32_t ty = ((int32_t)a->cur_jaw * 512) / 127;
-            uint32_t iy = (uint32_t)(ty >> 8), fy = (uint32_t)(ty & 255);
-            if (iy > 1u) { iy = 1u; fy = 256u; }
-
             for (i = 0; i < NV_NJAW; i++) {
-                int32_t p0_x = (int32_t)NV_JAW[iy][i].x,      p0_y = (int32_t)NV_JAW[iy][i].y;
-                int32_t p1_x = (int32_t)NV_JAW[iy + 1u][i].x, p1_y = (int32_t)NV_JAW[iy + 1u][i].y;
-                live_jaw[i].x = (int16_t)(p0_x + (((p1_x - p0_x) * (int32_t)fy) >> 8));
-                live_jaw[i].y = (int16_t)(p0_y + (((p1_y - p0_y) * (int32_t)fy) >> 8));
+                live_jaw[i].x = NV_JAW[iy][i].x;
+                live_jaw[i].y = (int16_t)(NV_JAW[iy][i].y + jaw_drop);
             }
             nv_vec_poly(buf, w, h, live_jaw, NV_NJAW, strip_y, NV_SWAP16(NV_COL_CORAL));
-        }
 
-        /* F. Velum Flap (white outline hanging from back of hard palate) */
-        if (a) {
+            /* F. Vermilion Lips (pink outline) */
+            int32_t lip_ap = ((int32_t)a->cur_lips * 14) / 127;
+            nv_pt_t live_ulip[NV_NUPPER_LIP];
+            nv_pt_t live_llip[NV_NLOWER_LIP];
+            for (i = 0; i < NV_NUPPER_LIP; i++) {
+                live_ulip[i].x = (int16_t)(NV_UPPER_LIP[iy][ix][i].x + (lip_ap >> 1));
+                live_ulip[i].y = NV_UPPER_LIP[iy][ix][i].y;
+            }
+            for (i = 0; i < NV_NLOWER_LIP; i++) {
+                live_llip[i].x = (int16_t)(NV_LOWER_LIP[iy][ix][i].x + (lip_ap >> 1));
+                live_llip[i].y = (int16_t)(NV_LOWER_LIP[iy][ix][i].y + jaw_drop);
+            }
+            nv_vec_poly(buf, w, h, live_ulip, NV_NUPPER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
+            nv_vec_poly(buf, w, h, live_llip, NV_NLOWER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
+
+            /* G. Velum / Soft palate port */
+            int32_t vel_open = (a->cur_velum * 12) / 3276;
             nv_pt_t live_velum[NV_NVELUM];
-            int32_t v_shift = (a->cur_velum * 6) / 3276; /* Open port lowers uvula toward pharynx */
             for (i = 0; i < NV_NVELUM; i++) {
                 live_velum[i].x = NV_VELUM[i].x;
-                live_velum[i].y = (int16_t)(NV_VELUM[i].y + (i >= 8 && i <= 14 ? v_shift : 0));
+                live_velum[i].y = (int16_t)(NV_VELUM[i].y - (i > 8 ? vel_open : 0));
             }
             nv_vec_poly(buf, w, h, live_velum, NV_NVELUM, strip_y, NV_SWAP16(NV_COL_WHITE));
-        }
 
-        /* G. Live Lips (pink outline: Upper & Lower vermilion border) */
-        if (a) {
-            nv_pt_t live_u_lip[NV_NUPPER_LIP];
-            nv_pt_t live_l_lip[NV_NLOWER_LIP];
-            int32_t tx = ((int32_t)a->cur_tongue * 512) / 127;
-            int32_t ty = ((int32_t)a->cur_jaw * 512) / 127;
-            uint32_t ix = (uint32_t)(tx >> 8), fx = (uint32_t)(tx & 255);
-            uint32_t iy = (uint32_t)(ty >> 8), fy = (uint32_t)(ty & 255);
-            if (ix > 1u) { ix = 1u; fx = 256u; }
-            if (iy > 1u) { iy = 1u; fy = 256u; }
+            /* H. 2D Formant Vowel Quadrant Crosshair Box */
+            int32_t bx = 186, by = 28, bw = 48, bh = 48;
+            nv_vec_line(buf, w, h, bx, by - strip_y, bx + bw, by - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
+            nv_vec_line(buf, w, h, bx + bw, by - strip_y, bx + bw, by + bh - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
+            nv_vec_line(buf, w, h, bx + bw, by + bh - strip_y, bx, by + bh - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
+            nv_vec_line(buf, w, h, bx, by + bh - strip_y, bx, by - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
 
-            for (i = 0; i < NV_NUPPER_LIP; i++) {
-                int32_t p00_x = (int32_t)NV_UPPER_LIP[iy][ix][i].x,         p00_y = (int32_t)NV_UPPER_LIP[iy][ix][i].y;
-                int32_t p01_x = (int32_t)NV_UPPER_LIP[iy][ix + 1u][i].x,    p01_y = (int32_t)NV_UPPER_LIP[iy][ix + 1u][i].y;
-                int32_t p10_x = (int32_t)NV_UPPER_LIP[iy + 1u][ix][i].x,    p10_y = (int32_t)NV_UPPER_LIP[iy + 1u][ix][i].y;
-                int32_t p11_x = (int32_t)NV_UPPER_LIP[iy + 1u][ix + 1u][i].x,p11_y = (int32_t)NV_UPPER_LIP[iy + 1u][ix + 1u][i].y;
+            /* Vowel quadrant corner labels */
+            nv_vec_text(buf, w, h, bx + 2, by + 10, strip_y, 45, "i", NV_SWAP16(NV_COL_AMBER));
+            nv_vec_text(buf, w, h, bx + bw - 8, by + 10, strip_y, 45, "u", NV_SWAP16(NV_COL_AMBER));
+            nv_vec_text(buf, w, h, bx + (bw / 2) - 3, by + bh - 2, strip_y, 45, "a", NV_SWAP16(NV_COL_AMBER));
 
-                int32_t top_x = p00_x + (((p01_x - p00_x) * (int32_t)fx) >> 8);
-                int32_t top_y = p00_y + (((p01_y - p00_y) * (int32_t)fx) >> 8);
-                int32_t bot_x = p10_x + (((p11_x - p10_x) * (int32_t)fx) >> 8);
-                int32_t bot_y = p10_y + (((p11_y - p10_y) * (int32_t)fx) >> 8);
+            /* Moving '+' cursor dot */
+            int32_t dot_x = bx + 4 + (((int32_t)a->cur_tongue * (bw - 8)) / 127);
+            int32_t dot_y = by + 4 + (((int32_t)a->cur_jaw * (bh - 8)) / 127) - strip_y;
+            nv_vec_line(buf, w, h, dot_x - 3, dot_y, dot_x + 3, dot_y, NV_SWAP16(NV_COL_WHITE));
+            nv_vec_line(buf, w, h, dot_x, dot_y - 3, dot_x, dot_y + 3, NV_SWAP16(NV_COL_WHITE));
 
-                live_u_lip[i].x = (int16_t)(top_x + (((bot_x - top_x) * (int32_t)fy) >> 8));
-                live_u_lip[i].y = (int16_t)(top_y + (((bot_y - top_y) * (int32_t)fy) >> 8));
-            }
-
-            for (i = 0; i < NV_NLOWER_LIP; i++) {
-                int32_t p00_x = (int32_t)NV_LOWER_LIP[iy][ix][i].x,         p00_y = (int32_t)NV_LOWER_LIP[iy][ix][i].y;
-                int32_t p01_x = (int32_t)NV_LOWER_LIP[iy][ix + 1u][i].x,    p01_y = (int32_t)NV_LOWER_LIP[iy][ix + 1u][i].y;
-                int32_t p10_x = (int32_t)NV_LOWER_LIP[iy + 1u][ix][i].x,    p10_y = (int32_t)NV_LOWER_LIP[iy + 1u][ix][i].y;
-                int32_t p11_x = (int32_t)NV_LOWER_LIP[iy + 1u][ix + 1u][i].x,p11_y = (int32_t)NV_LOWER_LIP[iy + 1u][ix + 1u][i].y;
-
-                int32_t top_x = p00_x + (((p01_x - p00_x) * (int32_t)fx) >> 8);
-                int32_t top_y = p00_y + (((p01_y - p00_y) * (int32_t)fx) >> 8);
-                int32_t bot_x = p10_x + (((p11_x - p10_x) * (int32_t)fx) >> 8);
-                int32_t bot_y = p10_y + (((p11_y - p10_y) * (int32_t)fx) >> 8);
-
-                live_l_lip[i].x = (int16_t)(top_x + (((bot_x - top_x) * (int32_t)fy) >> 8));
-                live_l_lip[i].y = (int16_t)(top_y + (((bot_y - top_y) * (int32_t)fy) >> 8));
-            }
-
-            /* K3 (Lips) closure modifier: at lips=0, lower lip seals against upper lip */
-            if (a->lips < 100u) {
-                int32_t close_shift = ((100u - (uint32_t)a->lips) * 8u) / 100u;
-                for (i = 0; i < NV_NLOWER_LIP; i++)
-                    live_l_lip[i].y -= (int16_t)close_shift;
-            }
-
-            nv_vec_poly(buf, w, h, live_u_lip, NV_NUPPER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
-            nv_vec_poly(buf, w, h, live_l_lip, NV_NLOWER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
-        }
-
-        /* H. Vowel Chart Inset (Upper right: X = 172..236, Y = 8..72) */
-        {
-            int32_t gx = 174, gy = 10, gw = 60, gh = 60;
-            /* Outer frame */
-            nv_vec_line(buf, w, h, gx, gy - strip_y, gx + gw, gy - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx + gw, gy - strip_y, gx + gw, gy + gh - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx + gw, gy + gh - strip_y, gx, gy + gh - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx, gy + gh - strip_y, gx, gy - strip_y, NV_SWAP16(NV_COL_GRID));
-
-            /* Grid internal cross lines */
-            nv_vec_line(buf, w, h, gx + 20, gy - strip_y, gx + 20, gy + gh - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx + 40, gy - strip_y, gx + 40, gy + gh - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx, gy + 20 - strip_y, gx + gw, gy + 20 - strip_y, NV_SWAP16(NV_COL_GRID));
-            nv_vec_line(buf, w, h, gx, gy + 40 - strip_y, gx + gw, gy + 40 - strip_y, NV_SWAP16(NV_COL_GRID));
-
-            /* Vowel labels (small Hershey scale 80 / 256) */
-            nv_vec_text(buf, w, h, gx + 3,  gy + 14, strip_y, 75, "I", NV_SWAP16(NV_COL_CYAN));
-            nv_vec_text(buf, w, h, gx + 45, gy + 14, strip_y, 75, "U", NV_SWAP16(NV_COL_CYAN));
-            nv_vec_text(buf, w, h, gx + 3,  gy + 54, strip_y, 75, "E", NV_SWAP16(NV_COL_CYAN));
-            nv_vec_text(buf, w, h, gx + 45, gy + 54, strip_y, 75, "A", NV_SWAP16(NV_COL_CYAN));
-
-            /* Live crosshair cursor '+' */
-            if (a) {
-                int32_t cx = gx + 4 + (((int32_t)a->cur_tongue * 52) / 127);
-                int32_t cy = gy + 4 + (((int32_t)a->cur_jaw * 52) / 127);
-                nv_vec_line(buf, w, h, cx - 3, cy - strip_y, cx + 3, cy - strip_y, NV_SWAP16(NV_COL_GREEN));
-                nv_vec_line(buf, w, h, cx, cy - 3 - strip_y, cx, cy + 3 - strip_y, NV_SWAP16(NV_COL_GREEN));
+            /* In ENV mode, draw trajectory line from start mouth to target mouth */
+            if (view_mode == NV_VIEW_ENV && params) {
+                int32_t s_x = bx + 4 + (((int32_t)params[P_E0] * (bw - 8)) / 127);
+                int32_t s_y = by + 4 + (((int32_t)params[P_E1] * (bw - 8)) / 127) - strip_y;
+                int32_t e_x = bx + 4 + (((int32_t)params[P_END_TONGUE] * (bw - 8)) / 127);
+                int32_t e_y = by + 4 + (((int32_t)params[P_END_JAW] * (bw - 8)) / 127) - strip_y;
+                nv_vec_line(buf, w, h, s_x, s_y, e_x, e_y, NV_SWAP16(NV_COL_PINK));
             }
         }
 
-        /* I. Top Header & Syllable Status (X = 6, Y = 10..24) */
-        nv_vec_text(buf, w, h, 8, 12, strip_y, 90, cname, NV_SWAP16(NV_COL_WHITE));
-        if (msg && msg[0]) {
+        /* Top Banner: Header Text */
+        nv_vec_text(buf, w, h, 6, 12, strip_y, 90, cname, NV_SWAP16(skull_col));
+
+        if (msg) {
             char sbuf[32];
             unsigned len;
             sbuf[0] = '[';
@@ -202,13 +204,44 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
             nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_AMBER));
-        } else if (is_target) {
+        } else if (view_mode == NV_VIEW_TARGET) {
+            const char *st = (a && a->state != SYLL_IDLE) ? "MORPH" : "TARGET";
             char sbuf[32];
             unsigned len;
-            const char *st = (a && a->state != SYLL_IDLE) ? "MORPH" : "TARGET";
             sbuf[0] = '[';
             sbuf[1] = 0;
             str_cpy(sbuf + 1, st, sizeof(sbuf) - 2);
+            len = str_len(sbuf);
+            sbuf[len] = ']';
+            sbuf[len + 1] = 0;
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
+        } else if (view_mode == NV_VIEW_ENV && params) {
+            static const char *const MODES[] = {"GLIDE", "RETURN", "BOUNCE", "TOUCH"};
+            uint8_t m = (uint8_t)clamp(params[P_ENV_MODE], 0, 3);
+            char sbuf[32];
+            unsigned len;
+            sbuf[0] = '[';
+            sbuf[1] = 0;
+            str_cpy(sbuf + 1, MODES[m], sizeof(sbuf) - 2);
+            len = str_len(sbuf);
+            sbuf[len] = ']';
+            sbuf[len + 1] = 0;
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
+        } else if (view_mode == NV_VIEW_RESONANCE) {
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, "[RESONANCE]", NV_SWAP16(NV_COL_CYAN));
+        } else if (view_mode == NV_VIEW_PHONEMES && params) {
+            char sbuf[32];
+            uint8_t oi = (uint8_t)clamp(params[P_E5], 0, NV_NONSETS);
+            uint8_t ci = (uint8_t)clamp(params[P_E6], 0, NV_NCODAS);
+            const char *on_str = NV_ONSET_DISP[oi];
+            const char *co_str = NV_CODA_DISP[ci];
+            sbuf[0] = '[';
+            sbuf[1] = 0;
+            str_cpy(sbuf + 1, on_str, sizeof(sbuf) - 2);
+            unsigned len = str_len(sbuf);
+            str_cpy(sbuf + len, " -> ", sizeof(sbuf) - len - 1);
+            len = str_len(sbuf);
+            str_cpy(sbuf + len, co_str, sizeof(sbuf) - len - 1);
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
@@ -220,9 +253,9 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             if (a->whisper_on) {
                 st = "WHISPER";
             } else if (a->state == SYLL_ONSET && a->onset_idx > 0 && a->onset_idx <= NV_NONSETS) {
-                st = NV_ONSETS[a->onset_idx - 1u].ipa;
+                st = NV_ONSET_DISP[a->onset_idx];
             } else if (a->state == SYLL_CODA && a->coda_idx > 0 && a->coda_idx <= NV_NCODAS) {
-                st = NV_CODAS[a->coda_idx - 1u].ipa;
+                st = NV_CODA_DISP[a->coda_idx];
             } else if (a->state != SYLL_IDLE) {
                 if (a->morph_mode == 3) {
                     st = "TOUCH";
@@ -255,35 +288,69 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
         static const struct {
             const char *name;
             uint16_t color;
-        } CARDS_START[4] = {
-            {"TONGUE", NV_COL_GREEN},
-            {"JAW",    NV_COL_CORAL},
-            {"LIPS",   NV_COL_PINK},
-            {"VELUM",  NV_COL_WHITE},
+        } CARDS_TABLE[5][4] = {
+            /* NV_VIEW_START */
+            { {"TONGUE", NV_COL_GREEN}, {"JAW", NV_COL_CORAL}, {"LIPS", NV_COL_PINK}, {"VELUM", NV_COL_WHITE} },
+            /* NV_VIEW_TARGET */
+            { {"END TNG", NV_COL_GREEN}, {"END JAW", NV_COL_CORAL}, {"END LIP", NV_COL_PINK}, {"END VEL", NV_COL_WHITE} },
+            /* NV_VIEW_ENV */
+            { {"SPEED", NV_COL_GREEN}, {"HOLD", NV_COL_AMBER}, {"RETURN", NV_COL_CORAL}, {"MODE", NV_COL_PINK} },
+            /* NV_VIEW_RESONANCE */
+            { {"WALL Q", NV_COL_CYAN}, {"LENGTH", NV_COL_AMBER}, {"TRACHEA", NV_COL_CORAL}, {"NASAL Q", NV_COL_WHITE} },
+            /* NV_VIEW_PHONEMES */
+            { {"ONSET", NV_COL_PINK}, {"CODA", NV_COL_AMBER}, {"BODY", NV_COL_CYAN}, {"CHOIR", NV_COL_CORAL} },
         };
-        static const struct {
-            const char *name;
-            uint16_t color;
-        } CARDS_TARGET[4] = {
-            {"END TNG", NV_COL_GREEN},
-            {"END JAW", NV_COL_CORAL},
-            {"END LIP", NV_COL_PINK},
-            {"END VEL", NV_COL_WHITE},
-        };
+
+        uint8_t mode_idx = view_mode < 5u ? view_mode : 0u;
 
         for (i = 0; i < 4u; i++) {
             int32_t cx = 4 + (int32_t)i * 59;
             int32_t cy = 182;
             int32_t cw = 55;
             int32_t ch = 54;
-            const char *cname = is_target ? CARDS_TARGET[i].name : CARDS_START[i].name;
-            uint16_t col = NV_SWAP16(is_target ? CARDS_TARGET[i].color : CARDS_START[i].color);
-            int32_t val = params ? (is_target ? params[P_END_TONGUE + i] : params[P_E0 + i]) : 64;
-            if (a && a->state != SYLL_IDLE) {
-                if (i == 0) val = a->cur_tongue;
-                else if (i == 1) val = a->cur_jaw;
-                else if (i == 2) val = a->lips;
-                else if (i == 3) val = (a->cur_velum * 127) / 3276;
+            const char *cname = CARDS_TABLE[mode_idx][i].name;
+            uint16_t col = NV_SWAP16(CARDS_TABLE[mode_idx][i].color);
+            int32_t val = 64;
+            char val_str[16] = "";
+
+            if (mode_idx == NV_VIEW_START) {
+                val = params ? params[P_E0 + i] : 64;
+                if (a && a->state != SYLL_IDLE) {
+                    if (i == 0) val = a->cur_tongue;
+                    else if (i == 1) val = a->cur_jaw;
+                    else if (i == 2) val = a->lips;
+                    else if (i == 3) val = (a->cur_velum * 127) / 3276;
+                }
+                fmt_int(val_str, val);
+            } else if (mode_idx == NV_VIEW_TARGET) {
+                val = params ? params[P_END_TONGUE + i] : 64;
+                fmt_int(val_str, val);
+            } else if (mode_idx == NV_VIEW_ENV) {
+                val = params ? params[P_ENV_SPEED + i] : 0;
+                if (i == 3) {
+                    static const char *const M_STR[] = {"GLID", "RET", "BNC", "TCH"};
+                    str_cpy(val_str, M_STR[clamp(val, 0, 3)], sizeof(val_str));
+                } else {
+                    fmt_int(val_str, val);
+                }
+            } else if (mode_idx == NV_VIEW_RESONANCE) {
+                val = params ? params[P_WALL_Q + i] : 64;
+                fmt_int(val_str, val);
+            } else if (mode_idx == NV_VIEW_PHONEMES) {
+                if (i == 0) {
+                    val = params ? params[P_E5] : 0;
+                    str_cpy(val_str, NV_ONSET_DISP[clamp(val, 0, NV_NONSETS)], sizeof(val_str));
+                } else if (i == 1) {
+                    val = params ? params[P_E6] : 0;
+                    str_cpy(val_str, NV_CODA_DISP[clamp(val, 0, NV_NCODAS)], sizeof(val_str));
+                } else if (i == 2) {
+                    val = params ? params[P_E4] : 0;
+                    const char *b_str = (val < 43) ? "MALE" : (val < 86 ? "FEML" : "CHLD");
+                    str_cpy(val_str, b_str, sizeof(val_str));
+                } else {
+                    val = params ? params[P_E7] : 0;
+                    fmt_int(val_str, clamp(val, 0, 2) + 1);
+                }
             }
 
             /* Card frame box */
@@ -297,15 +364,15 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             int32_t tx = cx + (cw - tw) / 2;
             nv_vec_text(buf, w, h, tx, cy + 12, strip_y, 60, cname, col);
 
-            /* Value number in center */
-            char val_str[16];
-            fmt_int(val_str, val);
-            int32_t vw = nv_vec_text_width(val_str, 95);
+            /* Value text in center */
+            int32_t scale = str_len(val_str) > 3 ? 75 : 95;
+            int32_t vw = nv_vec_text_width(val_str, scale);
             int32_t vx = cx + (cw - vw) / 2;
-            nv_vec_text(buf, w, h, vx, cy + 28, strip_y, 95, val_str, NV_SWAP16(NV_COL_WHITE));
+            nv_vec_text(buf, w, h, vx, cy + 28, strip_y, scale, val_str, NV_SWAP16(NV_COL_WHITE));
 
             /* Bottom level bar gauge */
-            int32_t bar_w = ((cw - 8) * val) / 127;
+            int32_t gauge_val = clamp(val, 0, 127);
+            int32_t bar_w = ((cw - 8) * gauge_val) / 127;
             if (bar_w > 0) {
                 nv_vec_line(buf, w, h, cx + 4, cy + ch - 6 - strip_y, cx + 4 + bar_w, cy + ch - 6 - strip_y, col);
                 nv_vec_line(buf, w, h, cx + 4, cy + ch - 5 - strip_y, cx + 4 + bar_w, cy + ch - 5 - strip_y, col);

@@ -5,7 +5,29 @@
 #include <string.h>
 
 #define P_E0 0
+#define P_E1 1
+#define P_E2 2
+#define P_E3 3
 #define P_END_TONGUE 4
+#define P_END_JAW 5
+#define P_END_LIPS 6
+#define P_END_VELUM 7
+#define P_WALL_Q 8
+#define P_TRACT_LEN 9
+#define P_TRACHEA 10
+#define P_NASAL_Q 11
+#define P_ENV_SPEED 12
+#define P_ENV_HOLD 13
+#define P_ENV_RET 14
+#define P_ENV_MODE 15
+#define P_E5 16
+#define P_E6 17
+#define P_E4 18
+#define P_E7 19
+
+static inline int32_t clamp(int32_t v, int32_t mn, int32_t mx) {
+    return v < mn ? mn : v > mx ? mx : v;
+}
 
 /* String and int helpers before nv_view.c */
 static unsigned str_len(const char *s) {
@@ -107,6 +129,18 @@ int main(int argc, char **argv) {
     nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, params, "/i/", 1);
     save_ppm("build/test_out/nv_view_vowel_i.ppm", screen, 240, 240);
     printf("nv_view_test: saved build/test_out/nv_view_vowel_i.ppm\n");
+
+    /* Test RESONANCE visualizer (mode 3) */
+    int16_t res_params[16] = {0};
+    res_params[P_WALL_Q] = 90;
+    res_params[P_TRACT_LEN] = 80;
+    res_params[P_TRACHEA] = 100;
+    res_params[P_NASAL_Q] = 75;
+    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, res_params, NULL, 3);
+    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, res_params, NULL, 3);
+    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, res_params, NULL, 3);
+    save_ppm("build/test_out/nv_view_resonance.ppm", screen, 240, 240);
+    printf("nv_view_test: saved build/test_out/nv_view_resonance.ppm\n");
 
     printf("nv_view_test: all ok!\n");
     return 0;

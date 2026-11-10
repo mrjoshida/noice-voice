@@ -1672,9 +1672,17 @@ static void ui_draw_page(uint32_t counting)
         page_entered();
     }
     cursor_fix();
-    int is_end_mouth = (!ui.home && cur_page()->id[0] == P_END_TONGUE);
-    int is_start_mouth = (!ui.home && cur_page()->id[0] == P_E0);
-    int is_mouth_tool = (ui.home || is_end_mouth || is_start_mouth);
+    uint8_t view_mode = NV_VIEW_START;
+    if (!ui.home) {
+        uint8_t pid = cur_page()->id[0];
+        if (pid == P_END_TONGUE)      view_mode = NV_VIEW_TARGET;
+        else if (pid == P_ED_FLT)     view_mode = NV_VIEW_ENV;
+        else if (pid == P_WALL_Q)     view_mode = NV_VIEW_RESONANCE;
+        else if (pid == P_E5)         view_mode = NV_VIEW_PHONEMES;
+        else if (pid == P_E0)         view_mode = NV_VIEW_START;
+        else                          view_mode = 0xFF; /* Not a vocal tract page */
+    }
+    int is_mouth_tool = (ui.home || view_mode != 0xFF);
 
     if (is_mouth_tool) {
         track_t *t = &trk[song.sel];
@@ -1687,7 +1695,7 @@ static void ui_draw_page(uint32_t counting)
         nv_artic_t view_artic = tr->artic;
         /* While idle, keep articulator visual synced to knobs */
         if (tr->artic.state == SYLL_IDLE) {
-            if (is_end_mouth) {
+            if (view_mode == NV_VIEW_TARGET) {
                 view_artic.tongue = (uint8_t)clamp(t->p[P_END_TONGUE], 0, 127);
                 view_artic.jaw = (uint8_t)clamp(t->p[P_END_JAW], 0, 127);
                 view_artic.lips = (uint8_t)clamp(t->p[P_END_LIPS], 0, 127);
@@ -1717,17 +1725,17 @@ static void ui_draw_page(uint32_t counting)
 
         lcd_sync();
         /* Strip 0: 0..89 (Skull, Palate, Tongue, Jaw, Lips, Velum, Rays, Vowel Inset, Banner) */
-        nv_view_render_strip(cv_px, 0, 90, &view_artic, tr->A, pres, tr->n, t->p, m, is_end_mouth);
+        nv_view_render_strip(cv_px, 0, 90, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
         lcd_blit(0, 0, 240, 90, cv_px);
 
         lcd_sync();
         /* Strip 1: 90..179 (Lower throat, jaw, tongue, rays) */
-        nv_view_render_strip(cv_px, 90, 90, &view_artic, tr->A, pres, tr->n, t->p, m, is_end_mouth);
+        nv_view_render_strip(cv_px, 90, 90, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
         lcd_blit(0, 90, 240, 90, cv_px);
 
         lcd_sync();
-        /* Strip 2: 180..239 (Bottom 4 cards: TONGUE/JAW/LIPS/VELUM or END TNG/END JAW/END LIP/END VEL) */
-        nv_view_render_strip(cv_px, 180, 60, &view_artic, tr->A, pres, tr->n, t->p, m, is_end_mouth);
+        /* Strip 2: 180..239 (Bottom 4 cards) */
+        nv_view_render_strip(cv_px, 180, 60, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
         lcd_blit(0, 180, 240, 60, cv_px);
 
         if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {

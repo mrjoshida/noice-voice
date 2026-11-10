@@ -233,6 +233,8 @@ static void tract_note_on(track_t *t, voice_t *v)
     if (tr->os != 1u || !tr->n)
         tract_setup(tr, 0u);
     tract_sync_creature(tr, t->engine);
+    tr->artic.onset_idx = (uint8_t)clamp(t->p[P_E5], 0, NV_NONSETS);
+    tr->artic.coda_idx = (uint8_t)clamp(t->p[P_E6], 0, NV_NCODAS);
     nv_artic_note_on(&tr->artic, legato);
     if (!legato) {                          /* from rest: the folds start closed */
         for (i = 0; i < TR_NGLOT; i++) {
@@ -267,7 +269,7 @@ static void tract_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     tr->artic.body = (uint8_t)clamp(p[P_E4], 0, 127);
     tr->artic.onset_idx = (uint8_t)clamp(p[P_E5], 0, NV_NONSETS);
     tr->artic.coda_idx = (uint8_t)clamp(p[P_E6], 0, NV_NCODAS);
-    tr->artic.key_pressure = t->at;
+    tr->artic.key_pressure = (t->at > 0) ? (uint8_t)t->at : (v->vel > 0 ? (uint8_t)v->vel : 64);
 
     /* Target Mouth Shape (End Shape on ENV Page 2) */
     tr->artic.end_tongue = (uint8_t)clamp(p[P_END_TONGUE], 0, 127);
@@ -578,6 +580,23 @@ static void tract_preset_apply(track_t *t, uint32_t pi)
     t->p[P_NASAL_Q]    = ext->nasal_q;
 }
 
+static const param_desc_t *tract_desc(const track_t *t, uint32_t slot)
+{
+    (void)t;
+    static const param_desc_t D_ONSET = {"ONSET", F_ENUM, 0, NV_NONSETS, 0, NV_ONSET_DISP, 0};
+    static const param_desc_t D_CODA  = {"CODA",  F_ENUM, 0, NV_NCODAS,  0, NV_CODA_DISP,  0};
+    static const char *const BODY_NAMES[] = {"MALE", "FEMALE", "CHILD", 0};
+    static const param_desc_t D_BODY  = {"BODY",  F_ENUM, 0, 2,           0, BODY_NAMES,    0};
+    static const char *const CHOIR_NAMES[] = {"1 SOLO", "2 DUET", "3 CHOIR", 0};
+    static const param_desc_t D_CHOIR = {"CHOIR", F_ENUM, 0, 2,           0, CHOIR_NAMES,   0};
+
+    if (slot == 5u) return &D_ONSET;
+    if (slot == 6u) return &D_CODA;
+    if (slot == 4u) return &D_BODY;
+    if (slot == 7u) return &D_CHOIR;
+    return 0;
+}
+
 static const engine_t ENG_HUMAN = {
     .name = "HUMAN",
     .page_title = {"MOUTH", "VOICE"},
@@ -591,6 +610,7 @@ static const engine_t ENG_HUMAN = {
         {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
         {"CHOIR", F_INT, 0, 2, 0, 0, 0},
     },
+    .desc = tract_desc,
     .presets = HUMAN_PRESETS,
     .npresets = NELEM(HUMAN_PRESETS),
     .note_on = tract_note_on,
@@ -613,6 +633,7 @@ static const engine_t ENG_TROLL = {
         {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
         {"CHOIR", F_INT, 0, 2, 0, 0, 0},
     },
+    .desc = tract_desc,
     .presets = TROLL_PRESETS,
     .npresets = NELEM(TROLL_PRESETS),
     .note_on = tract_note_on,
@@ -635,6 +656,7 @@ static const engine_t ENG_ELF = {
         {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
         {"CHOIR", F_INT, 0, 2, 0, 0, 0},
     },
+    .desc = tract_desc,
     .presets = ELF_PRESETS,
     .npresets = NELEM(ELF_PRESETS),
     .note_on = tract_note_on,
@@ -657,6 +679,7 @@ static const engine_t ENG_BEAST = {
         {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
         {"CHOIR", F_INT, 0, 2, 0, 0, 0},
     },
+    .desc = tract_desc,
     .presets = BEAST_PRESETS,
     .npresets = NELEM(BEAST_PRESETS),
     .note_on = tract_note_on,

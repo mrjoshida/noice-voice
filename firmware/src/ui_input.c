@@ -1073,11 +1073,16 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (vp == &TSEL->p[P_ATSNS] && !*vp && v)             /* AFTERTOUCH on (1.8): the engine's routing, if none */
         at_turn_on(TSEL);
     *vp = (int16_t)v;
-    if (pg->id[0] == P_END_TONGUE || (pg->id[0] == P_E0 && !ui.home)) {
-        char mb[24];
+    if (pg->id[0] == P_END_TONGUE || pg->id[0] == P_ED_FLT || pg->id[0] == P_WALL_Q ||
+        pg->id[0] == P_E5 || (pg->id[0] == P_E0 && !ui.home)) {
+        char mb[32];
         str_cpy(mb, d->label, sizeof mb);
         str_cpy(mb + str_len(mb), " ", sizeof mb - str_len(mb));
-        fmt_int(mb + str_len(mb), (int32_t)v);
+        if (d->fmt == F_ENUM && d->names && v >= d->min && v <= d->max) {
+            str_cpy(mb + str_len(mb), d->names[v - d->min], sizeof mb - str_len(mb));
+        } else {
+            fmt_int(mb + str_len(mb), (int32_t)v);
+        }
         ui_message(mb);
     }
     if (pg->scope != SC_GLOBAL) {

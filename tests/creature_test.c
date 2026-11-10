@@ -111,6 +111,26 @@ int main(int argc, char **argv)
     check("GLIDE completes: cur_tongue reaches target 127", tr->artic.cur_tongue == 127);
     trk_note_off(&trk[0], 60);
 
+    /* Test RETURN mode */
+    trk[0].p[P_E0] = 0;
+    trk[0].p[P_END_TONGUE] = 127;
+    trk[0].p[P_ENV_SPEED] = 10;
+    trk[0].p[P_ENV_HOLD] = 0;
+    trk[0].p[P_ENV_RET] = 10;
+    trk[0].p[P_ENV_MODE] = 1; /* RETURN */
+    trk_note_on(&trk[0], 60, 100);
+    for (int b = 0; b < 50; b++)
+        track_render(&trk[0], buf, 256);
+    check("RETURN completes: cur_tongue returns toward 0", tr->artic.cur_tongue < 20);
+    trk_note_off(&trk[0], 60);
+
+    /* Test Retroflex onset consonant */
+    trk[0].p[P_E5] = 17; /* Retroflex [ɻ] onset */
+    trk_note_on(&trk[0], 60, 100);
+    track_render(&trk[0], buf, 32);
+    check("Retroflex [ɻ] onset active", tr->artic.state == SYLL_ONSET);
+    trk_note_off(&trk[0], 60);
+
     if (bad) {
         printf("creature_test: FAILED with %d errors!\n", bad);
         return 1;

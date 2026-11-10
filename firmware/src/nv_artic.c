@@ -64,6 +64,7 @@ void nv_artic_note_on(nv_artic_t *a, uint8_t legato)
     if (!legato) {
         a->morph_phase = 0;
         a->morph_dir = 1;
+        a->hold_timer_samples = 0;
     }
 
     if (legato && a->state != SYLL_IDLE) {
@@ -73,8 +74,10 @@ void nv_artic_note_on(nv_artic_t *a, uint8_t legato)
     }
 
     if (a->onset_idx > 0 && a->onset_idx <= NV_NONSETS) {
+        uint32_t dur = NV_ONSETS[a->onset_idx - 1u].dur_ms;
+        if (dur < 20u) dur = 20u;
         a->state = SYLL_ONSET;
-        a->onset_samples = ((uint32_t)a->speed_ms * 44100u) / 1000u;
+        a->onset_samples = (dur * 44100u) / 1000u;
         a->state_samples = 0;
     } else {
         a->state = SYLL_NUCLEUS;
@@ -91,6 +94,10 @@ void nv_artic_note_off(nv_artic_t *a)
         a->state = SYLL_CODA;
         a->coda_samples = (60u * 44100u) / 1000u; /* ~60 ms coda closure */
         a->state_samples = 0;
+    } else if (a->morph_mode == 1 && a->morph_dir > 0 && a->morph_phase > 0) {
+        /* In RETURN mode: key release triggers return to Start shape */
+        a->morph_dir = -1;
+        a->hold_timer_samples = 0;
     } else {
         a->state = SYLL_IDLE;
     }
@@ -210,6 +217,7 @@ void nv_artic_update(nv_artic_t *a, uint32_t n_samples)
                 } else {
                     if (a->morph_phase <= r_step) {
                         a->morph_phase = 0;
+                        if (a->state != SYLL_CODA) a->state = SYLL_IDLE;
                     } else {
                         a->morph_phase -= r_step;
                     }
@@ -281,18 +289,38 @@ void nv_artic_update(nv_artic_t *a, uint32_t n_samples)
 
     if (a->state == SYLL_ONSET && a->onset_idx > 0u && a->onset_idx <= NV_NONSETS) {
         const nv_consonant_t *c = &NV_ONSETS[a->onset_idx - 1u];
-        uint32_t cs = c->constr_sec;
-        if (cs < NV_SECTIONS)
-            target_A[cs] = c->min_area;
+        int32_t blend = a->onset_samples > 0 ? (int32_t)((a->state_samples * 256u) / a->onset_samples) : 256;
+        if (blend > 256) blend = 256;
+        /* Whole-tract consonant articulation profile blending into vowel */
+        for (i = 0; i < NV_SECTIONS; i++) {
+            int32_t ca = (int32_t)c->areas[i];
+            target_A[i] = ca + (((target_A[i] - ca) * blend) >> 8);
+        }
         if (c->nasal)
-            target_velum = 3276; /* Velum open for nasals */
+            target_velum = 3276 - ((3276 * blend) >> 8);
+        if (c->manner == 2) /* fricative turbulence */
+            a->noise_amt = (uint8_t)(96 - ((96 * blend) >> 8));
+        else if (c->manner == 0) /* stop release burst */
+            a->noise_amt = (blend < 80) ? (uint8_t)(90 - (blend * 90 / 80)) : 0;
+        else
+            a->noise_amt = 0;
     } else if (a->state == SYLL_CODA && a->coda_idx > 0u && a->coda_idx <= NV_NCODAS) {
         const nv_consonant_t *c = &NV_CODAS[a->coda_idx - 1u];
-        uint32_t cs = c->constr_sec;
-        if (cs < NV_SECTIONS)
-            target_A[cs] = c->min_area;
+        int32_t blend = a->coda_samples > 0 ? (int32_t)((a->state_samples * 256u) / a->coda_samples) : 256;
+        if (blend > 256) blend = 256;
+        /* Vowel blends into coda consonant profile */
+        for (i = 0; i < NV_SECTIONS; i++) {
+            int32_t ca = (int32_t)c->areas[i];
+            target_A[i] = target_A[i] + (((ca - target_A[i]) * blend) >> 8);
+        }
         if (c->nasal)
-            target_velum = 3276;
+            target_velum = ((3276 * blend) >> 8);
+        if (c->manner == 2)
+            a->noise_amt = (uint8_t)((96 * blend) >> 8);
+        else
+            a->noise_amt = 0;
+    } else {
+        a->noise_amt = 0;
     }
 
     /* 6. Lips modifier on sections 19..21 */
