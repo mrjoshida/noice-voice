@@ -462,6 +462,10 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/noise_test" tests/noise_test.c -lm
     mkdir -p build/noise_demo
     run "NOISE: colour slopes, key-tracked filter and clock, META period, DC, clipping, retrigger, cost, demos" "$OUT/noise_test" build/noise_demo
+    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/creature_test" tests/creature_test.c -lm
+    run "NOICE VOICE creatures: 4 creature engines, 48 presets, articulatory envelope, retroflex/beatbox" "$OUT/creature_test"
+    ${CC%% *} -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/nv_view_test" tests/nv_view_test.c -lm
+    run "NOICE VOICE vector view: mid-sagittal head strips and resonance mode" "$OUT/nv_view_test"
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/tract_test" tests/tract_test.c -lm
     mkdir -p build/tract_demo
     run "TRACT (NOICE VOICE): speaks, no DC or clipping at every corner, vowel resonances, no runaway, cost, demos" "$OUT/tract_test" build/tract_demo
@@ -549,6 +553,18 @@ if command -v node >/dev/null 2>&1; then
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
 else
     echo "== skip web tests (no node)"
+fi
+
+if ! command -v emcc >/dev/null 2>&1; then
+    echo "== skip the browser emulator (no emcc: Emscripten builds web/emu)"
+elif ! command -v node >/dev/null 2>&1 || [ ! -f build/gen/felucca_tables.h ]; then
+    echo "== skip the browser emulator (needs node and build/gen)"
+else
+    run "browser emulator: the firmware to WebAssembly (web/emu/build.sh -> build/emu)" sh web/emu/build.sh
+    cc -O2 -ffp-contract=off -w $HALI -Ibuild/gen -Ifirmware/src -o "$OUT/emu_native" web/emu/native_check.c -lm
+    run "browser emulator: the same song from the native build" "$OUT/emu_native" "$OUT/emu_native.f32"
+    run "browser emulator: boot, keys, MIDI, screen, LEDs, PLAY, a save kept across instances, = native, cost" \
+        node web/emu/emu_test.mjs build/emu/felucca.wasm "$OUT/emu_native.f32"
 fi
 
 [ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }

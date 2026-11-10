@@ -4,9 +4,10 @@ import json
 import math
 from pathlib import Path
 
-CHIMERA_JSON = Path("build/gen/chimera_geometry.json")
-JHF_FILE = Path("scratch/hershey_simplex.jhf")
-OUT_HEADER = Path("build/gen/nv_tables.h")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+CHIMERA_JSON = REPO_ROOT / "assets" / "noice" / "chimera_geometry.json"
+JHF_FILE = REPO_ROOT / "assets" / "noice" / "hershey_simplex.jhf"
+OUT_HEADER = REPO_ROOT / "build" / "gen" / "nv_tables.h"
 
 # Screen transformation parameters:
 # SX = int(round(OX + scale * x))

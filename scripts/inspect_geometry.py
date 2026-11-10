@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json
 
-with open("build/gen/chimera_geometry.json") as f:
+with open("assets/noice/chimera_geometry.json") as f:
     d = json.load(f)
 
 male = d["bodies"]["male"]

@@ -42,7 +42,7 @@ def parse_jhf(filename):
             })
     return glyphs
 
-glyphs = parse_jhf("scratch/hershey_simplex.jhf")
+glyphs = parse_jhf("assets/noice/hershey_simplex.jhf")
 print(f"Parsed {len(glyphs)} glyphs.")
 for g in glyphs:
     if g['char'] in "A0a":

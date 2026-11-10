@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build complete phoneme database for NOICE VOICE in build/gen/chimera_geometry.json."""
+"""Build complete phoneme database for NOICE VOICE in assets/noice/chimera_geometry.json."""
 import json
 from pathlib import Path
 
-path = Path("build/gen/chimera_geometry.json")
+path = Path(__file__).resolve().parents[1] / "assets" / "noice" / "chimera_geometry.json"
 with open(path) as f:
     d = json.load(f)
 

@@ -1682,14 +1682,25 @@ static void ui_draw_page(uint32_t counting)
         else if (pid == P_E0)         view_mode = NV_VIEW_START;
         else                          view_mode = 0xFF; /* Not a vocal tract page */
     }
-    int is_mouth_tool = (ui.home || view_mode != 0xFF);
+    track_t *t = &trk[song.sel];
+    int is_mouth_tool = is_tract_engine(t->engine) && (ui.home || view_mode != 0xFF);
 
     if (is_mouth_tool) {
-        track_t *t = &trk[song.sel];
         tract_t *tr = tr_of(t);
-        int32_t pres[TR_NMAX];
+        int32_t pres[TR_NMAX] = {0};
         uint32_t i;
+        char pbuf[16];
         const char *m = (ui.msg_t && ui.msg[0]) ? ui.msg : 0;
+        if (!m && ui.home && view_mode == NV_VIEW_START && tr->artic.state == SYLL_IDLE) {
+            uint32_t u = user_of(t);
+            const engine_t *en = ENGINES[t->eng_req % NENGINES];
+            if (u < UP_SLOTS) {
+                up_name(u, pbuf);
+                m = pbuf;
+            } else if (en->npresets) {
+                m = en->presets[t->preset % en->npresets].name;
+            }
+        }
         tract_sync_creature(tr, t->engine);
 
         nv_artic_t view_artic = tr->artic;

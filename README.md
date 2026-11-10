@@ -5,13 +5,13 @@
 [![Device: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-emerald.svg?style=for-the-badge)](BUILDING.md)
 
 > ### **[PLAY IN BROWSER NOW: https://mrjoshida.github.io/noice-voice/](https://mrjoshida.github.io/noice-voice/)**
-> **No hardware required!** Try the full M-VAVE FM-1 faceplate, live 240×240 vector mid-sagittal vocal tract LCD, 44-phoneme acoustic waveguide synthesis, and 16-step speech sequencer directly in your browser.
+> **No hardware required!** Run the actual NOICE VOICE C firmware compiled to WebAssembly (`web/emu/`) with live AudioWorklet audio, the 240×240 vector mid-sagittal vocal tract LCD, 44-phoneme acoustic waveguide synthesis, and 16-step speech sequencer directly in your browser.
 
 **NOICE VOICE** is an advanced physical modeling acoustic waveguide vocal synthesizer and speech sequencer for the **M-VAVE FM-1** groovebox hardware (JieLi AC79NN dual-core DSP). 
 
 Instead of traditional subtractive oscillators and static formant filters, NOICE VOICE simulates the physical human (and creature) vocal tract in real time using a 44-section **Kelly-Lochbaum reflection waveguide**, dynamic nasal cavity branching, non-linear glottal pulse flow modeling, and an articulatory mouth envelope capable of speaking continuous English sentences.
 
-An interactive **Web Simulator** is hosted on [GitHub Pages](https://mrjoshida.github.io/noice-voice/) (built from [`web/sim.html`](web/sim.html)), replicating the full FM-1 faceplate, real-time 240×240 vector mid-sagittal LCD display, 4 rotary encoders, and live WebAudio physical synthesis.
+The **Browser Emulator** is hosted on [GitHub Pages](https://mrjoshida.github.io/noice-voice/) using upstream Felucca's stock WebAssembly + AudioWorklet simulator (`web/emu/`, compiled directly from the C firmware sources into `felucca.wasm`).
 
 ---
 
@@ -59,8 +59,7 @@ An interactive **Web Simulator** is hosted on [GitHub Pages](https://mrjoshida.g
     - **Track 2 (`TROLL`)**: *"DEEP CAVE OGRES ROAR AND CRUSH ROCK"* (with pharyngeal/uvular/retroflex growls)
     - **Track 3 (`ELF`)**: *"BREATHE IN BREATHE OUT I AM MADE OF AIR"*
     - **Track 4 (`BEAST`)**: *"BOOTS AND CATS AND BOOTS AND CATS"* (vocal beatbox groove)
-  - Web Simulator includes 7 selectable phrases (`NOICE`, `OGRE`, `MADE AIR`, `BOOTS`, `CLICKS`, `RETRO`, `ELF SONG`).
-  - Pressing `PLAY` immediately speaks with synchronized 60 FPS vocal tract animation.
+  - Pressing `PLAY` immediately speaks the active track's phrase with synchronized 60 FPS vocal tract animation, and you can switch tracks via `SHIFT`/`TRACK` (`REC` held + keys 1–4 or track buttons) and load any of the 48 presets from `PRESETS` / `SAVE`.
 
 ---
 
@@ -107,20 +106,35 @@ NOICE VOICE includes 48 built-in presets across the 4 creatures (12 presets per 
 
 ---
 
-## Interactive Web Simulator
+## Browser Emulator (Stock Felucca WebAssembly Build)
 
-**[Launch the Live Web Simulator on GitHub Pages](https://mrjoshida.github.io/noice-voice/)** — no hardware, build step, or server dependencies required.
+**[Launch the Live Emulator on GitHub Pages](https://mrjoshida.github.io/noice-voice/)** — runs the exact C firmware compiled with Emscripten to WebAssembly (`felucca.wasm`) inside a Web Audio API `AudioWorklet`, with flash persistence in IndexedDB.
 
-To open the local source file offline:
+To build and serve locally (requires [Emscripten](https://emscripten.org/) `emcc` and generated headers in `build/gen/`):
 
 ```bash
-open web/sim.html
+./build.sh
+sh web/emu/build.sh
+python3 -m http.server -d build/emu 8790   # open http://localhost:8790/
 ```
 
-### Simulator Controls
-- **Mouse / Touch**: Drag knobs vertically to turn. Click buttons or piano keys to trigger notes.
-- **Computer Keyboard**: Keys `A S D F G H J K` play white keys, `W E T Y U O P` play black keys. `Spacebar` toggles sequencer `PLAY`.
-- **Live Sound**: Uses native WebAudio to run the physical waveguide equations in real time.
+Or build + stage + test using the site builder (generates missing headers via Python + Pillow/fontTools without needing the JieLi SDK):
+
+```bash
+python3 scripts/build_web_site.py
+node web/emu/emu_test.mjs build/emu/felucca.wasm
+```
+
+### Emulator Controls
+- **Switch on**: Click `Switch on` on the faceplate overlay to start WebAudio + WebAssembly execution.
+- **Mouse / Touch**: Drag knobs vertically to turn. Click buttons or piano keys (`F3`–`G5`) to play; **`Shift`-click** holds a button (`FX`, `GLO`, `SCL`, `EDIT`, `SEQ`, `REC`).
+- **Computer Keyboard**:
+  - `Z`–`'` / `Q`–`O`: 27 piano keys
+  - `1`–`=`: panel buttons (`FX` … `REC`)
+  - `[` / `]`: `OCT-` / `OCT+`
+  - `↑` / `↓`: `SELECT` encoder (tempo, or breath/selection on Home)
+  - `←` / `→`: `ALGORITHM` encoder (`MALE` / `FEMALE` / `CHILD` body on Home)
+- **Web MIDI**: Connect a hardware MIDI controller in Chromium browsers (`MIDI CC 20–27` optional panel knob mapping).
 
 ---
 

@@ -9,7 +9,7 @@ try:
     with urllib.request.urlopen(url, timeout=5) as resp:
         content = resp.read().decode('ascii')
         print(f"Downloaded rowmans.jhf, length: {len(content)} bytes")
-        with open("scratch/hershey_simplex.jhf", "w") as f:
+        with open("assets/noice/hershey_simplex.jhf", "w") as f:
             f.write(content)
 except Exception as e:
     print(f"Error fetching Hershey font: {e}")

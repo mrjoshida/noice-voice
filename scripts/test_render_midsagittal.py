@@ -3,7 +3,7 @@
 import json
 import math
 
-with open("build/gen/chimera_geometry.json") as f:
+with open("assets/noice/chimera_geometry.json") as f:
     d = json.load(f)
 
 male = d["bodies"]["male"]

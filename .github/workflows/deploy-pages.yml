@@ -1,13 +1,18 @@
-name: Deploy Web Simulator to GitHub Pages
+name: Deploy Web Emulator to GitHub Pages
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'web/sim.html'
-      - 'scripts/test_sim.py'
+      - 'web/emu/**'
+      - 'firmware/**'
+      - 'tools/**'
+      - 'assets/**'
       - 'scripts/build_web_site.py'
+      - 'tests/creature_test.c'
+      - 'tests/tract_test.c'
+      - 'tests/nv_view_test.c'
       - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
@@ -20,22 +25,59 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
+      - name: Install Python dependencies
+        run: pip install Pillow fonttools numpy
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Verify simulator integrity
-        run: python3 scripts/test_sim.py
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.56
 
-      - name: Build GitHub Pages site
+      - name: Generate build headers
+        run: |
+          mkdir -p build/gen
+          python3 tools/gen_aa_font.py build/gen/ui_fonts.h --preset inter-tight
+          python3 tools/gen_aa_icons.py build/gen/ui_icons.h
+          python3 tools/gen_aa_keycaps.py build/gen/ui_keycaps.h
+          python3 tools/gen_ui_palettes.py build/gen/ui_palettes.h
+          python3 tools/gen_tables.py build/gen/felucca_tables.h
+          python3 tools/gen_fm6_patches.py build/gen/felucca_fm6.h
+          python3 tools/gen_samples.py build/gen/felucca_samples.h
+          python3 tools/gen_adpcm.py build/gen/felucca_adpcm.h
+          python3 tools/noice/gen_tables.py
+
+      - name: Build stock WASM simulator and stage site
         run: python3 scripts/build_web_site.py
+
+      - name: Run WebAssembly emulator and native parity tests
+        run: |
+          mkdir -p build/host
+          cc -O2 -ffp-contract=off -w -Ifirmware/hal -Ifirmware/bsp/chip -Ifirmware/bsp/boards/fm1 -Ibuild/gen -Ifirmware/src -o build/host/emu_native web/emu/native_check.c -lm
+          build/host/emu_native build/host/emu_native.f32
+          node web/emu/emu_test.mjs build/emu/felucca.wasm build/host/emu_native.f32
+
+      - name: Run NOICE VOICE host unit tests
+        run: |
+          mkdir -p build/host build/tract_demo
+          cc -O2 -w -Ifirmware/hal -Ifirmware/bsp/chip -Ifirmware/bsp/boards/fm1 -Ibuild/gen -Ifirmware/src -o build/host/creature_test tests/creature_test.c -lm
+          ./build/host/creature_test
+          cc -O2 -w -Ifirmware/hal -Ifirmware/bsp/chip -Ifirmware/bsp/boards/fm1 -Ibuild/gen -Ifirmware/src -o build/host/tract_test tests/tract_test.c -lm
+          ./build/host/tract_test build/tract_demo
+          cc -O2 -w -Ibuild/gen -Ifirmware/src -o build/host/nv_view_test tests/nv_view_test.c -lm
+          ./build/host/nv_view_test
 
       - name: Deploy to GitHub Pages branch
         uses: peaceiris/actions-gh-pages@v4

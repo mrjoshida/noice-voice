@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-path = Path("build/gen/chimera_geometry.json")
+path = Path("assets/noice/chimera_geometry.json")
 with open(path) as f:
     data = json.load(f)
 

@@ -1735,13 +1735,17 @@ static void ui_input(void)
         b = panel_btn_of(id);
         switch (b) {
         case B_PLAY:
-            if (song.playing || chain_busy() || seq_counting())
+            if (layer_play())                           /* (GLO held: RESTART) */
+                break;
+            if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
+            else if (!ui.home && cur_page()->graph == GR_SONG)
+                chain_play_ui();
             else
                 transport_req = 1;
             break;
         case B_ARP: {
-            if (ui.home) {
+            if (ui.home && is_tract_engine(TSEL->engine)) {
                 tract_t *tr = tr_of(TSEL);
                 nv_artic_respeak(&tr->artic);
                 ui_message("RE-SPEAK");
@@ -1751,8 +1755,13 @@ static void ui_input(void)
             }
             break;
         }
-        case B_REC:
+        case B_SEQ:
+        case B_REC:                                     /* tap: above; held, its layer (ui_layer.c) */
         case B_SAVE:
+        case B_FX:                                      /* the layers' buttons: ui_layer.c */
+        case B_GLO:
+        case B_SCL:
+        case B_EDIT:
         case B_HOME:
             break;
         case B_OCTDN:
@@ -1815,7 +1824,7 @@ static void ui_input(void)
     if (!lay && (s = panel_enc(EN_PRESET)) != 0)
         presets_turn(s);
     if (!lay && (s = panel_enc(EN_ALGO)) != 0) {
-        if (ui.home) {
+        if (ui.home && is_tract_engine(TSEL->engine)) {
             TSEL->p[P_E4] = (int16_t)clamp(TSEL->p[P_E4] + s * 4, 0, 127);
             const char *bm = TSEL->p[P_E4] < 42 ? "BODY: MALE" : TSEL->p[P_E4] < 85 ? "BODY: FEMALE" : "BODY: CHILD";
             ui_message(bm);
@@ -1824,7 +1833,7 @@ static void ui_input(void)
         }
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
-        if (!glo && ui.home) {
+        if (!glo && ui.home && is_tract_engine(TSEL->engine)) {
             tract_t *tr = tr_of(TSEL);
             tr->artic.breath_base = (uint8_t)clamp((int32_t)tr->artic.breath_base + s * 4, 0, 127);
             char bmsg[24];

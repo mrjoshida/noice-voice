@@ -51,6 +51,7 @@ typedef struct {
 } tract_t;
 ENG_MEM_FITS("TRACT", sizeof(tract_t));
 
+static int is_tract_engine(uint32_t e) { uint32_t ei = e % NENGINES; return ei >= 5u && ei <= 8u; }
 static tract_t *tr_of(const track_t *t) { return (tract_t *)ENG_MEM((uint32_t)(t - trk) % NPART); }
 
 /* placeholder area functions (cm^2 Q12), glottis -> lips, 22 points (resampled to n): /a/ and /i/ */
@@ -73,9 +74,13 @@ static int32_t tr_refl(int32_t a, int32_t b)
     return s > 0 ? (int32_t)(((int64_t)(a - b) << TR_Q) / s) : 0;
 }
 
+static void tract_setup(tract_t *tr, uint32_t mode);
+
 /* the control step: shape -> areas -> reflections (called every render, i.e. every 32 samples) */
 static void tr_control(tract_t *tr, const int16_t *p)
 {
+    if (!tr->n || !tr->nn || !tr->ns || tr->ns >= tr->n)
+        tract_setup(tr, 0u);
     uint32_t i, n = tr->n, nn = tr->nn;
     int32_t vel = tr->artic.cur_velum, amin = 0x7FFFFFFF;
     int32_t tlen = p ? clamp(p[P_TRACT_LEN], 0, 127) : 64;
