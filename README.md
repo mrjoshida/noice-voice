@@ -1,14 +1,17 @@
 # NOICE VOICE
 
-[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Device: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-emerald.svg)](BUILDING.md)
-[![Simulator: WebAudio](https://img.shields.io/badge/simulator-WebAudio%20HTML5-cyan.svg)](sim/index.html)
+[![Play in Browser Now](https://img.shields.io/badge/▶_PLAY_IN_BROWSER-NOW_(WEB_SIMULATOR)-00ff66?style=for-the-badge)](https://mrjoshida.github.io/noice-voice/)
+[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg?style=for-the-badge)](LICENSE)
+[![Device: M-VAVE FM-1](https://img.shields.io/badge/hardware-M--VAVE%20FM--1-emerald.svg?style=for-the-badge)](BUILDING.md)
+
+> ### **[PLAY IN BROWSER NOW: https://mrjoshida.github.io/noice-voice/](https://mrjoshida.github.io/noice-voice/)**
+> **No hardware required!** Try the full M-VAVE FM-1 faceplate, live 240×240 vector mid-sagittal vocal tract LCD, 44-phoneme acoustic waveguide synthesis, and 16-step speech sequencer directly in your browser.
 
 **NOICE VOICE** is an advanced physical modeling acoustic waveguide vocal synthesizer and speech sequencer for the **M-VAVE FM-1** groovebox hardware (JieLi AC79NN dual-core DSP). 
 
 Instead of traditional subtractive oscillators and static formant filters, NOICE VOICE simulates the physical human (and creature) vocal tract in real time using a 44-section **Kelly-Lochbaum reflection waveguide**, dynamic nasal cavity branching, non-linear glottal pulse flow modeling, and an articulatory mouth envelope capable of speaking continuous English sentences.
 
-An interactive **Web Simulator** is included in [`sim/index.html`](sim/index.html) and [`web/sim.html`](web/sim.html), replicating the full FM-1 faceplate, real-time 240×240 vector mid-sagittal LCD display, 4 rotary encoders, and live WebAudio physical synthesis.
+An interactive **Web Simulator** is hosted on [GitHub Pages](https://mrjoshida.github.io/noice-voice/) (built from [`web/sim.html`](web/sim.html)), replicating the full FM-1 faceplate, real-time 240×240 vector mid-sagittal LCD display, 4 rotary encoders, and live WebAudio physical synthesis.
 
 ---
 
@@ -106,11 +109,11 @@ NOICE VOICE includes 48 built-in presets across the 4 creatures (12 presets per 
 
 ## Interactive Web Simulator
 
-The browser simulator runs locally without any build steps or server dependencies:
+**[Launch the Live Web Simulator on GitHub Pages](https://mrjoshida.github.io/noice-voice/)** — no hardware, build step, or server dependencies required.
+
+To open the local source file offline:
 
 ```bash
-open sim/index.html
-# or
 open web/sim.html
 ```
 

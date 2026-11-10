@@ -1,0 +1,45 @@
+name: Deploy Web Simulator to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/sim.html'
+      - 'scripts/test_sim.py'
+      - 'scripts/build_web_site.py'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify simulator integrity
+        run: python3 scripts/test_sim.py
+
+      - name: Build GitHub Pages site
+        run: python3 scripts/build_web_site.py
+
+      - name: Deploy to GitHub Pages branch
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build/site
+          publish_branch: gh-pages
