@@ -1413,7 +1413,7 @@ static void autosave_poll(void)
         return;
     as.last = fm1_ms;
     as.wrote = 1;
-#define NOICE_AUTOSAVE_TAG 0x4Eu
+#define NOICE_AUTOSAVE_TAG 0x4Fu
     project_capture(&proj_scratch);
 #if NOICE_PROBE
     proj_scratch.rsv = NOICE_AUTOSAVE_TAG;

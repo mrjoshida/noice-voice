@@ -2,6 +2,31 @@
 /* NOICE VOICE: Vector View Implementation */
 #include "nv_view.h"
 
+static inline uint16_t nv_col(uint16_t c, uint8_t mono_mode)
+{
+    if (!mono_mode)
+        return NV_SWAP16(c);
+    if (c == NV_COL_BLACK)
+        return 0u;
+    if (c == NV_COL_WHITE)
+        return 0xFFFFu;
+    {
+        uint32_t r = ((uint32_t)(c >> 11) & 31u) * 255u / 31u;
+        uint32_t g = ((uint32_t)(c >> 5) & 63u) * 255u / 63u;
+        uint32_t b = ((uint32_t)c & 31u) * 255u / 31u;
+        uint32_t y = (r * 54u + g * 183u + b * 19u) >> 8;
+        if (mono_mode == 2u) { /* MONO: white foreground, UI_BW_GREY (0x528A) dim elements */
+            uint16_t bw = y >= 100u ? 0xFFFFu : 0x528Au;
+            return NV_SWAP16(bw);
+        }
+        {
+            uint32_t y5 = y >> 3;
+            uint16_t gr = (uint16_t)((y5 << 11) | (y5 << 6) | y5);
+            return NV_SWAP16(gr);
+        }
+    }
+}
+
 void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                           const nv_artic_t *a, const int32_t *areas,
                           const int32_t *pres, uint32_t n_sections,
@@ -10,6 +35,8 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
 {
     int32_t w = 240, h = strip_h;
     uint32_t i;
+    uint8_t mono_mode = (uint8_t)((view_mode >> 4) & 3u);
+    view_mode &= 0x0Fu;
     (void)areas;
 
     /* 1. Clear strip to black */
@@ -33,13 +60,13 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
         }
 
         /* A. Cranium / Skull (creature outline) */
-        nv_vec_poly(buf, w, h, NV_SKULL, NV_NSKULL, strip_y, NV_SWAP16(skull_col));
+        nv_vec_poly(buf, w, h, NV_SKULL, NV_NSKULL, strip_y, nv_col(skull_col, mono_mode));
 
         /* In RESONANCE: Wall Q tissue damping contour */
         if (view_mode == NV_VIEW_RESONANCE && params) {
             int32_t wall_q = params[P_WALL_Q];
             if (wall_q > 20) {
-                uint16_t wcol = NV_SWAP16(NV_COL_CYAN);
+                uint16_t wcol = nv_col(NV_COL_CYAN, mono_mode);
                 for (i = 0; i < NV_NSKULL - 1; i += 2) {
                     int32_t sx = (int32_t)NV_SKULL[i].x - 2;
                     int32_t sy = (int32_t)NV_SKULL[i].y - strip_y;
@@ -51,13 +78,13 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
         }
 
         /* B. Palate / Hard roof of mouth (white outline) */
-        nv_vec_poly(buf, w, h, NV_PALATE, NV_NPALATE, strip_y, NV_SWAP16(NV_COL_WHITE));
+        nv_vec_poly(buf, w, h, NV_PALATE, NV_NPALATE, strip_y, nv_col(NV_COL_WHITE, mono_mode));
 
         /* In RESONANCE: Subglottal Trachea & Upper Nasal Cavity */
         if (view_mode == NV_VIEW_RESONANCE && params) {
             /* Trachea cartilage rings below glottis */
             int32_t trach = params[P_TRACHEA];
-            uint16_t tr_col = trach > 0 ? NV_SWAP16(NV_COL_CORAL) : NV_SWAP16(NV_COL_DIM_AMB);
+            uint16_t tr_col = nv_col(trach > 0 ? NV_COL_CORAL : NV_COL_DIM_AMB, mono_mode);
             for (int32_t ty = 162; ty <= 178; ty += 5) {
                 nv_vec_line(buf, w, h, 34, ty - strip_y, 48, ty - strip_y, tr_col);
             }
@@ -66,7 +93,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
 
             /* Nasal cavity branch */
             int32_t nas_q = params[P_NASAL_Q];
-            uint16_t nas_col = nas_q > 0 ? NV_SWAP16(NV_COL_WHITE) : NV_SWAP16(NV_COL_DIM_AMB);
+            uint16_t nas_col = nv_col(nas_q > 0 ? NV_COL_WHITE : NV_COL_DIM_AMB, mono_mode);
             nv_vec_line(buf, w, h, 65, 75 - strip_y, 90, 68 - strip_y, nas_col);
             nv_vec_line(buf, w, h, 90, 68 - strip_y, 120, 72 - strip_y, nas_col);
             nv_vec_line(buf, w, h, 120, 72 - strip_y, 135, 95 - strip_y, nas_col);
@@ -82,7 +109,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 int32_t p = pres[sec];
                 int32_t mag = p < 0 ? -p : p;
                 if (mag > 200) {
-                    uint16_t col = mag > 2000 ? NV_SWAP16(NV_COL_AMBER) : NV_SWAP16(NV_COL_DIM_AMB);
+                    uint16_t col = nv_col(mag > 2000 ? NV_COL_AMBER : NV_COL_DIM_AMB, mono_mode);
                     nv_vec_line(buf, w, h,
                                 NV_RAYS[i].inner.x, (int32_t)NV_RAYS[i].inner.y - strip_y,
                                 NV_RAYS[i].outer.x, (int32_t)NV_RAYS[i].outer.y - strip_y,
@@ -128,7 +155,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                     }
                 }
             }
-            nv_vec_poly(buf, w, h, live_tongue, NV_NTONGUE, strip_y, NV_SWAP16(NV_COL_GREEN));
+            nv_vec_poly(buf, w, h, live_tongue, NV_NTONGUE, strip_y, nv_col(NV_COL_GREEN, mono_mode));
 
             /* Highlight consonant constriction in PHONEMES mode */
             if (view_mode == NV_VIEW_PHONEMES && params && params[P_E5] > 0 && params[P_E5] <= NV_NONSETS) {
@@ -137,8 +164,8 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 if (r_idx < NV_NRAYS) {
                     int32_t cx = ((int32_t)NV_RAYS[r_idx].inner.x + (int32_t)NV_RAYS[r_idx].outer.x) / 2;
                     int32_t cy = ((int32_t)NV_RAYS[r_idx].inner.y + (int32_t)NV_RAYS[r_idx].outer.y) / 2 - strip_y;
-                    nv_vec_line(buf, w, h, cx - 4, cy, cx + 4, cy, NV_SWAP16(NV_COL_AMBER));
-                    nv_vec_line(buf, w, h, cx, cy - 4, cx, cy + 4, NV_SWAP16(NV_COL_AMBER));
+                    nv_vec_line(buf, w, h, cx - 4, cy, cx + 4, cy, nv_col(NV_COL_AMBER, mono_mode));
+                    nv_vec_line(buf, w, h, cx, cy - 4, cx, cy + 4, nv_col(NV_COL_AMBER, mono_mode));
                 }
             }
 
@@ -149,10 +176,11 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 live_jaw[i].x = NV_JAW[iy][i].x;
                 live_jaw[i].y = (int16_t)(NV_JAW[iy][i].y + jaw_drop);
             }
-            nv_vec_poly(buf, w, h, live_jaw, NV_NJAW, strip_y, NV_SWAP16(NV_COL_CORAL));
+            nv_vec_poly(buf, w, h, live_jaw, NV_NJAW, strip_y, nv_col(NV_COL_CORAL, mono_mode));
 
             /* F. Vermilion Lips (pink outline) */
-            int32_t lip_ap = ((int32_t)a->cur_lips * 14) / 127;
+            int32_t lip_u = clamp((a->cur_lips - 512) / 120, 0, 127);
+            int32_t lip_ap = (lip_u * 14) / 127;
             nv_pt_t live_ulip[NV_NUPPER_LIP];
             nv_pt_t live_llip[NV_NLOWER_LIP];
             for (i = 0; i < NV_NUPPER_LIP; i++) {
@@ -163,8 +191,8 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 live_llip[i].x = (int16_t)(NV_LOWER_LIP[iy][ix][i].x + (lip_ap >> 1));
                 live_llip[i].y = (int16_t)(NV_LOWER_LIP[iy][ix][i].y + jaw_drop);
             }
-            nv_vec_poly(buf, w, h, live_ulip, NV_NUPPER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
-            nv_vec_poly(buf, w, h, live_llip, NV_NLOWER_LIP, strip_y, NV_SWAP16(NV_COL_PINK));
+            nv_vec_poly(buf, w, h, live_ulip, NV_NUPPER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
+            nv_vec_poly(buf, w, h, live_llip, NV_NLOWER_LIP, strip_y, nv_col(NV_COL_PINK, mono_mode));
 
             /* G. Velum / Soft palate port */
             int32_t vel_open = (a->cur_velum * 12) / 3276;
@@ -173,25 +201,32 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 live_velum[i].x = NV_VELUM[i].x;
                 live_velum[i].y = (int16_t)(NV_VELUM[i].y - (i > 8 ? vel_open : 0));
             }
-            nv_vec_poly(buf, w, h, live_velum, NV_NVELUM, strip_y, NV_SWAP16(NV_COL_WHITE));
+            nv_vec_poly(buf, w, h, live_velum, NV_NVELUM, strip_y, nv_col(NV_COL_WHITE, mono_mode));
 
             /* H. 2D Formant Vowel Quadrant Crosshair Box */
             int32_t bx = 186, by = 28, bw = 48, bh = 48;
-            nv_vec_line(buf, w, h, bx, by - strip_y, bx + bw, by - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
-            nv_vec_line(buf, w, h, bx + bw, by - strip_y, bx + bw, by + bh - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
-            nv_vec_line(buf, w, h, bx + bw, by + bh - strip_y, bx, by + bh - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
-            nv_vec_line(buf, w, h, bx, by + bh - strip_y, bx, by - strip_y, NV_SWAP16(NV_COL_DIM_AMB));
+            nv_vec_line(buf, w, h, bx, by - strip_y, bx + bw, by - strip_y, nv_col(NV_COL_DIM_AMB, mono_mode));
+            nv_vec_line(buf, w, h, bx + bw, by - strip_y, bx + bw, by + bh - strip_y, nv_col(NV_COL_DIM_AMB, mono_mode));
+            nv_vec_line(buf, w, h, bx + bw, by + bh - strip_y, bx, by + bh - strip_y, nv_col(NV_COL_DIM_AMB, mono_mode));
+            nv_vec_line(buf, w, h, bx, by + bh - strip_y, bx, by - strip_y, nv_col(NV_COL_DIM_AMB, mono_mode));
 
-            /* Vowel quadrant corner labels */
-            nv_vec_text(buf, w, h, bx + 2, by + 10, strip_y, 45, "i", NV_SWAP16(NV_COL_AMBER));
-            nv_vec_text(buf, w, h, bx + bw - 8, by + 10, strip_y, 45, "u", NV_SWAP16(NV_COL_AMBER));
-            nv_vec_text(buf, w, h, bx + (bw / 2) - 3, by + bh - 2, strip_y, 45, "a", NV_SWAP16(NV_COL_AMBER));
+            /* Faint 3x3 internal vowel grid lines */
+            nv_vec_line(buf, w, h, bx + (bw / 3), by - strip_y, bx + (bw / 3), by + bh - strip_y, nv_col(NV_COL_GRID, mono_mode));
+            nv_vec_line(buf, w, h, bx + ((bw * 2) / 3), by - strip_y, bx + ((bw * 2) / 3), by + bh - strip_y, nv_col(NV_COL_GRID, mono_mode));
+            nv_vec_line(buf, w, h, bx, by + (bh / 3) - strip_y, bx + bw, by + (bh / 3) - strip_y, nv_col(NV_COL_GRID, mono_mode));
+            nv_vec_line(buf, w, h, bx, by + ((bh * 2) / 3) - strip_y, bx + bw, by + ((bh * 2) / 3) - strip_y, nv_col(NV_COL_GRID, mono_mode));
+
+            /* Four corner vowel labels: i (top-left), u (top-right), ae (bottom-left), a (bottom-right) */
+            nv_vec_text(buf, w, h, bx + 2, by + 10, strip_y, 45, "i", nv_col(NV_COL_AMBER, mono_mode));
+            nv_vec_text(buf, w, h, bx + bw - 8, by + 10, strip_y, 45, "u", nv_col(NV_COL_AMBER, mono_mode));
+            nv_vec_text(buf, w, h, bx + 2, by + bh - 2, strip_y, 45, "ae", nv_col(NV_COL_AMBER, mono_mode));
+            nv_vec_text(buf, w, h, bx + bw - 8, by + bh - 2, strip_y, 45, "a", nv_col(NV_COL_AMBER, mono_mode));
 
             /* Moving '+' cursor dot */
             int32_t dot_x = bx + 4 + (((int32_t)a->cur_tongue * (bw - 8)) / 127);
             int32_t dot_y = by + 4 + (((int32_t)a->cur_jaw * (bh - 8)) / 127) - strip_y;
-            nv_vec_line(buf, w, h, dot_x - 3, dot_y, dot_x + 3, dot_y, NV_SWAP16(NV_COL_WHITE));
-            nv_vec_line(buf, w, h, dot_x, dot_y - 3, dot_x, dot_y + 3, NV_SWAP16(NV_COL_WHITE));
+            nv_vec_line(buf, w, h, dot_x - 3, dot_y, dot_x + 3, dot_y, nv_col(NV_COL_WHITE, mono_mode));
+            nv_vec_line(buf, w, h, dot_x, dot_y - 3, dot_x, dot_y + 3, nv_col(NV_COL_WHITE, mono_mode));
 
             /* In ENV mode, draw trajectory line from start mouth to target mouth */
             if (view_mode == NV_VIEW_ENV && params) {
@@ -199,12 +234,12 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 int32_t s_y = by + 4 + (((int32_t)params[P_E1] * (bw - 8)) / 127) - strip_y;
                 int32_t e_x = bx + 4 + (((int32_t)params[P_END_TONGUE] * (bw - 8)) / 127);
                 int32_t e_y = by + 4 + (((int32_t)params[P_END_JAW] * (bw - 8)) / 127) - strip_y;
-                nv_vec_line(buf, w, h, s_x, s_y, e_x, e_y, NV_SWAP16(NV_COL_PINK));
+                nv_vec_line(buf, w, h, s_x, s_y, e_x, e_y, nv_col(NV_COL_PINK, mono_mode));
             }
         }
 
         /* Top Banner: Header Text */
-        nv_vec_text(buf, w, h, 6, 12, strip_y, 90, cname, NV_SWAP16(skull_col));
+        nv_vec_text(buf, w, h, 6, 12, strip_y, 90, cname, nv_col(skull_col, mono_mode));
 
         if (msg) {
             char sbuf[32];
@@ -215,7 +250,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_AMBER));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, nv_col(NV_COL_AMBER, mono_mode));
         } else if (view_mode == NV_VIEW_TARGET) {
             const char *st = (a && a->state != SYLL_IDLE) ? "MORPH" : "TARGET";
             char sbuf[32];
@@ -226,7 +261,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, nv_col(NV_COL_PINK, mono_mode));
         } else if (view_mode == NV_VIEW_ENV && params) {
             static const char *const MODES[] = {"GLIDE", "RETURN", "BOUNCE", "TOUCH"};
             uint8_t m = (uint8_t)clamp(params[P_ENV_MODE], 0, 3);
@@ -238,9 +273,9 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, nv_col(NV_COL_PINK, mono_mode));
         } else if (view_mode == NV_VIEW_RESONANCE) {
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, "[RESONANCE]", NV_SWAP16(NV_COL_CYAN));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, "[RESONANCE]", nv_col(NV_COL_CYAN, mono_mode));
         } else if (view_mode == NV_VIEW_PHONEMES && params) {
             char sbuf[32];
             uint8_t oi = (uint8_t)clamp(params[P_E5], 0, NV_NONSETS);
@@ -257,7 +292,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, nv_col(NV_COL_PINK, mono_mode));
         } else if (a) {
             const char *st = "VOWEL";
             char sbuf[32];
@@ -291,7 +326,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             len = str_len(sbuf);
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
-            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_AMBER));
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, nv_col(NV_COL_AMBER, mono_mode));
         }
     }
 
@@ -321,7 +356,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             int32_t cw = 55;
             int32_t ch = 54;
             const char *cname = CARDS_TABLE[mode_idx][i].name;
-            uint16_t col = NV_SWAP16(CARDS_TABLE[mode_idx][i].color);
+            uint16_t col = nv_col(CARDS_TABLE[mode_idx][i].color, mono_mode);
             int32_t val = 64;
             char val_str[16] = "";
 
@@ -330,7 +365,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 if (a && a->state != SYLL_IDLE) {
                     if (i == 0) val = a->cur_tongue;
                     else if (i == 1) val = a->cur_jaw;
-                    else if (i == 2) val = a->lips;
+                    else if (i == 2) val = clamp((a->cur_lips - 512) / 120, 0, 127);
                     else if (i == 3) val = (a->cur_velum * 127) / 3276;
                 }
                 fmt_int(val_str, val);
@@ -380,7 +415,7 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             int32_t scale = str_len(val_str) > 3 ? 75 : 95;
             int32_t vw = nv_vec_text_width(val_str, scale);
             int32_t vx = cx + (cw - vw) / 2;
-            nv_vec_text(buf, w, h, vx, cy + 28, strip_y, scale, val_str, NV_SWAP16(NV_COL_WHITE));
+            nv_vec_text(buf, w, h, vx, cy + 28, strip_y, scale, val_str, nv_col(NV_COL_WHITE, mono_mode));
 
             /* Bottom level bar gauge */
             int32_t gauge_val = clamp(val, 0, 127);

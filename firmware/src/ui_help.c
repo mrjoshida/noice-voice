@@ -14,6 +14,17 @@ static const char H_EDIT[] = "[K1-4]SOUND[EDIT]HOLD: ENGINES";
 static const char H_LANES[] = "[K1-4]LANE LEVELS[EDIT]HOLD: MUTES";
 static const char H_FMOP[] = "[K1]OPERATOR[SAVE]HOLD: UNDO";
 static const struct { const char *title, *hint; } HELP_PAGE[] = {
+    {"MOUTH", "[K1]TONGUE[K2]JAW[K3]LIPS"},
+    {"END MOUTH", "[K1-4]END MOUTH[EDIT]PHONEMES"},
+    {"PHONEMES", "[K1]ONSET[K2]CODA[K3]BODY"},
+    {"GLOTTIS", "[K1]TENSION[K2]BREATH[K4]VOICE"},
+    {"ENV TIME", "[K1]SPEED[K2]HOLD[K4]MODE"},
+    {"END SHAPE", "[K1-4]END SHAPE[ENV]BREATH"},
+    {"BREATH", "[K1]ATK[K2]REL[K4]BREATH"},
+    {"RESONANCE", "[K1]WALL[K2]LENGTH[K3]TRACHEA"},
+    {"SPACE", "[K1-4]SENDS[FX]HOLD: PERFORM"},
+    {"VIBRATO", "[K1]DEPTH[K2]RATE[LFO]LFO"},
+    {"SCALE", "[K2]SCALE[SCL]HOLD: VOWELS"},
     {"ENV", "[K1-4]A D S R[ENV]ENV DEST"},
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
     {"LFO", "[K1-4]SHAPE[LFO]HOLD: MOMENTARY"},
@@ -60,7 +71,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 #define H_GRID "[KEYS]STEPS[K2]LANE[SEQ]DETAIL"
 /* a layer's (LAYER_*): what its footer row (LAYERS[].foot) does not say */
 static const char *const HELP_LAYER[LAYER_N] = {
-    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
+    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "[KEYS]SOLO MUTE FILL TAP[K1-4]LEVELS", "[KEYS]F3-G4[K1-4]ROOT SCL CHORD",
     "[K1]ENGINE[K2]SOUND[K3]FAV", "[K1]LENGTH[K3]SWING[K4]GATE", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
 };
 

@@ -1674,13 +1674,18 @@ static void ui_draw_page(uint32_t counting)
     cursor_fix();
     uint8_t view_mode = NV_VIEW_START;
     if (!ui.home) {
-        uint8_t pid = cur_page()->id[0];
-        if (pid == P_END_TONGUE)      view_mode = NV_VIEW_TARGET;
-        else if (pid == P_ED_FLT)     view_mode = NV_VIEW_ENV;
-        else if (pid == P_WALL_Q)     view_mode = NV_VIEW_RESONANCE;
-        else if (pid == P_E5)         view_mode = NV_VIEW_PHONEMES;
-        else if (pid == P_E0)         view_mode = NV_VIEW_START;
-        else                          view_mode = 0xFF; /* Not a vocal tract page */
+        const page_t *pg = cur_page();
+        uint8_t pid = pg->id[0];
+        if ((pg->scope == SC_TRACK || pg->scope == SC_ENGINE) && pg->graph == GR_NONE) {
+            if (pid == P_END_TONGUE)                           view_mode = NV_VIEW_TARGET;
+            else if (pid == P_ED_FLT && pg->id[3] == P_ED_FX)  view_mode = NV_VIEW_ENV;
+            else if (pid == P_WALL_Q)                          view_mode = NV_VIEW_RESONANCE;
+            else if (pid == P_E5)                              view_mode = NV_VIEW_PHONEMES;
+            else if (pid == P_E0)                              view_mode = NV_VIEW_START;
+            else                                               view_mode = 0xFF;
+        } else {
+            view_mode = 0xFF; /* Standard Felucca panel / graph page */
+        }
     }
     track_t *t = &trk[song.sel];
     int is_mouth_tool = is_tract_engine(t->engine) && (ui.home || view_mode != 0xFF);
@@ -1689,17 +1694,32 @@ static void ui_draw_page(uint32_t counting)
         tract_t *tr = tr_of(t);
         int32_t pres[TR_NMAX] = {0};
         uint32_t i;
-        char pbuf[16];
+        char pbuf[24];
         const char *m = (ui.msg_t && ui.msg[0]) ? ui.msg : 0;
+        if (!m && ui.bpm_t) {
+            str_cpy(pbuf, "BPM ", sizeof pbuf);
+            fmt_int(pbuf + 4, song.g[G_BPM]);
+            m = pbuf;
+        }
         if (!m && ui.home && view_mode == NV_VIEW_START && tr->artic.state == SYLL_IDLE) {
             uint32_t u = user_of(t);
             const engine_t *en = ENGINES[t->eng_req % NENGINES];
+            const char *pn = "";
+            char ubuf[16];
             if (u < UP_SLOTS) {
-                up_name(u, pbuf);
-                m = pbuf;
+                up_name(u, ubuf);
+                pn = ubuf;
             } else if (en->npresets) {
-                m = en->presets[t->preset % en->npresets].name;
+                pn = en->presets[t->preset % en->npresets].name;
             }
+            pbuf[0] = 'T';
+            pbuf[1] = (char)('1' + song.sel);
+            pbuf[2] = ' ';
+            if (t->p[P_MUTE])
+                str_cpy(pbuf + 3, "MUTED", sizeof pbuf - 3);
+            else
+                str_cpy(pbuf + 3, pn, sizeof pbuf - 3);
+            m = pbuf;
         }
         tract_sync_creature(tr, t->engine);
 
@@ -1734,19 +1754,25 @@ static void ui_draw_page(uint32_t counting)
         for (i = 0; i < tr->n && i < TR_NMAX; i++)
             pres[i] = tr->R[i] + tr->L[i];
 
+        uint8_t strip_mode = view_mode;
+        if (ux.mono)
+            strip_mode |= NV_VIEW_GREY;
+        else if (!ux.light && ux.dim == UI_BW_GREY && ux.line == UI_BW_GREY && ux.tint == ux.bg && ux.grid == ux.bg)
+            strip_mode |= NV_VIEW_BW;
+
         lcd_sync();
         /* Strip 0: 0..89 (Skull, Palate, Tongue, Jaw, Lips, Velum, Rays, Vowel Inset, Banner) */
-        nv_view_render_strip(cv_px, 0, 90, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
+        nv_view_render_strip(cv_px, 0, 90, &view_artic, tr->A, pres, tr->n, t->p, m, strip_mode);
         lcd_blit(0, 0, 240, 90, cv_px);
 
         lcd_sync();
         /* Strip 1: 90..179 (Lower throat, jaw, tongue, rays) */
-        nv_view_render_strip(cv_px, 90, 90, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
+        nv_view_render_strip(cv_px, 90, 90, &view_artic, tr->A, pres, tr->n, t->p, m, strip_mode);
         lcd_blit(0, 90, 240, 90, cv_px);
 
         lcd_sync();
         /* Strip 2: 180..239 (Bottom 4 cards) */
-        nv_view_render_strip(cv_px, 180, 60, &view_artic, tr->A, pres, tr->n, t->p, m, view_mode);
+        nv_view_render_strip(cv_px, 180, 60, &view_artic, tr->A, pres, tr->n, t->p, m, strip_mode);
         lcd_blit(0, 180, 240, 60, cv_px);
 
         if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {

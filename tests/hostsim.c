@@ -132,6 +132,7 @@ static void host_preset_req(track_t *t, uint32_t e, uint32_t pi)
 }
 static void host_preset(track_t *t, uint32_t e, uint32_t pi)
 {
+    t->p[P_MUTE] = 0;                             /* tests and the browser bench load presets onto a playable track */
     host_preset_req(t, e, pi);
     t->engine = t->eng_req;                       /* (DIGITAL without FELUCCA_FM4: FM6) */
     eng_mem_claim(t);                             /* (voice.c engine_block would at the next block) */

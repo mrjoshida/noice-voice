@@ -247,7 +247,8 @@ static uint32_t engine_icon(const char *name)
         {"DIGITAL", ICON_ALGORITHM},
 #endif
         {"PHASE", ICON_PHASE}, {"LOFI", ICON_BITS},
-        {"SAMPLE", ICON_SAMPLE}, {"VOICE", ICON_MOUTH}, {"TRIO", ICON_TRIO}, {"WHEEL", ICON_DRAWBAR},
+        {"SAMPLE", ICON_SAMPLE}, {"VOICE", ICON_MOUTH}, {"HUMAN", ICON_MOUTH}, {"TROLL", ICON_MOUTH},
+        {"ELF", ICON_MOUTH}, {"BEAST", ICON_MOUTH}, {"TRIO", ICON_TRIO}, {"WHEEL", ICON_DRAWBAR},
         {"SLICE", ICON_SLICE},
         {"GRAIN", ICON_GRAIN},
         {"PHYS", ICON_PHYS},

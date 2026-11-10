@@ -255,7 +255,7 @@ static void layer_opened(uint32_t l)
             lys.v[4u + k] = trk[k].p[P_LEVEL];
         } else {
             lys.v[k] = TSEL->p[P_ROOT + k];
-            lys.v[4u + k] = k < 2u ? TSEL->p[P_CHRD + k] : 0;
+            lys.v[4u + k] = k < 2u ? TSEL->p[P_CHRD + k] : (int16_t)TSEL->p[P_E0 + (k - 2u)];
         }
     lys.v[8] = song.g[G_BPM];
     memcpy(lys.mute, drum_mute, sizeof lys.mute);
@@ -655,26 +655,30 @@ static void layer_key(uint32_t l, uint32_t k)
             lys.fill |= 1u << k;                        /* E4: FILL while held (layer_keys) */
         }
     } else if (l == LAYER_SCL) {
-        static const uint8_t VOWEL_COORDS[9][2] = {
-            {0, 0},     /* /i/ */
-            {64, 0},    /* /ɨ/ */
-            {127, 0},   /* /u/ */
-            {0, 64},    /* /e/ */
-            {64, 64},   /* /ə/ */
-            {127, 64},  /* /o/ */
-            {0, 127},   /* /æ/ */
-            {64, 127},  /* /a/ */
-            {127, 127}, /* /ɑ/ */
-        };
-        static const char *const VOWEL_NAMES[9] = {
-            "/i/", "/ɨ/", "/u/",
-            "/e/", "/ə/", "/o/",
-            "/æ/", "/a/", "/ɑ/"
-        };
-        if (!key_black(k) && p < 9u) {
-            TSEL->p[P_E0] = VOWEL_COORDS[p][0];
-            TSEL->p[P_E1] = VOWEL_COORDS[p][1];
-            ui_message(VOWEL_NAMES[p]);
+        if (is_tract_engine(TSEL->eng_req)) {
+            static const uint8_t VOWEL_COORDS[9][2] = {
+                {0, 0},     /* /i/ */
+                {64, 0},    /* /i-/ */
+                {127, 0},   /* /u/ */
+                {0, 64},    /* /e/ */
+                {64, 64},   /* /@/ */
+                {127, 64},  /* /o/ */
+                {0, 127},   /* /ae/ */
+                {64, 127},  /* /a/ */
+                {127, 127}, /* /ah/ */
+            };
+            static const char *const VOWEL_NAMES[9] = {
+                "/i/", "/i-/", "/u/",
+                "/e/", "/@/", "/o/",
+                "/ae/", "/a/", "/ah/"
+            };
+            if (!key_black(k) && p < 9u) {
+                TSEL->p[P_E0] = VOWEL_COORDS[p][0];
+                TSEL->p[P_E1] = VOWEL_COORDS[p][1];
+                ui_message(VOWEL_NAMES[p]);
+            }
+        } else {
+            TSEL->p[P_ROOT] = (int16_t)((k + 5u) % 12u);   /* F3 = 5 (F), C4 = 0 (C) */
         }
     } else if (l == LAYER_EDIT && !key_black(k)) {
         if (p < NENG_SHOWN && p < LY_INIT)
@@ -846,7 +850,13 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 trk[lys.trk % NTRK].p[P_ROOT + k] = lys.v[k];
             trk[lys.trk % NTRK].p[P_CHRD] = lys.v[4];
             trk[lys.trk % NTRK].p[P_VOIC] = lys.v[5];
-            ui_message("SCALE PUT BACK");
+            if (is_tract_engine(trk[lys.trk % NTRK].eng_req)) {
+                trk[lys.trk % NTRK].p[P_E0] = lys.v[6];
+                trk[lys.trk % NTRK].p[P_E1] = lys.v[7];
+                ui_message("VOWELS PUT BACK");
+            } else {
+                ui_message("SCALE PUT BACK");
+            }
         }
     }
     lys.oct &= (uint8_t)(((fm1_in.buttons >> dn) & 1u) | ((fm1_in.buttons >> up) & 1u) << 1);
@@ -873,10 +883,24 @@ static uint32_t layer_leds(uint32_t *br)
             on = b ? p < NTRK && glo_sounding(p) : (p < NTRK && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
                  (p == 6u && seq_fill);
             can = !b && (p < NTRK || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
-        } else if (l == LAYER_SCL) {                    /* the root lit, the scale's notes breathe */
-            e = (k + 5u + 12u - root) % 12u;
-            on = e == 0u;
-            can = (mask >> e) & 1u;
+        } else if (l == LAYER_SCL) {
+            if (is_tract_engine(TSEL->eng_req)) {
+                if (!b && p < 9u) {
+                    static const uint8_t VC[9][2] = {
+                        {0, 0}, {64, 0}, {127, 0},
+                        {0, 64}, {64, 64}, {127, 64},
+                        {0, 127}, {64, 127}, {127, 127}
+                    };
+                    int32_t dt = (int32_t)TSEL->p[P_E0] - VC[p][0];
+                    int32_t dj = (int32_t)TSEL->p[P_E1] - VC[p][1];
+                    on = (dt < 0 ? -dt : dt) <= 24 && (dj < 0 ? -dj : dj) <= 24;
+                    can = 1u;
+                }
+            } else {                                    /* the root lit, the scale's notes breathe */
+                e = (k + 5u + 12u - root) % 12u;
+                on = e == 0u;
+                can = (mask >> e) & 1u;
+            }
         } else if (l == LAYER_EDIT && !b) {             /* the engine lit, the others and INIT breathe */
             on = p < NENG_SHOWN && p < LY_INIT && eng_vis(p) == TSEL->eng_req % NENGINES;
             can = p < NENG_SHOWN && p < LY_INIT ? 1u : (p == LY_INIT || p == LY_CLEAN) && !chain_busy();
@@ -974,11 +998,30 @@ static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t ic
         GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
         cv_text_in(x, t + 22 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
     } else if (name && h > 24) {                           /* the same, 12 px, 2 px between (the icon at a side) */
-        int32_t t = y + HALF_UP(h - (12 + 2 + AF_S_CAP_H));
-        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V | AL_N(2), "layer cell icon + name centred up/down");
-        cv_icon_on(note ? x + LC_W - 17 : x + 5, t, 12, icon, ink, fill);
-        GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
-        cv_text_in(x, t + 14 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
+        uint32_t sz = 12u;
+        int has_icon = (icon - ICON_TRK < NTRK) || icon_cell(&sz, icon) >= 0;
+        if (!has_icon && !note) {
+            GFX_HOOK_ALIGN(x, y, x + LC_W, y + h, AL_HV, "layer cell name centred");
+            cv_text_in(x, y + CAP_IN(S, h), LC_W, &AF_S, name, ink, fill);
+        } else if (note) {
+            int32_t t = y + HALF_UP(h - (12 + 2 + AF_S_CAP_H));
+            if (has_icon) {
+                GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V | AL_N(2), "layer cell icon + name centred up/down");
+                cv_icon_on(x + LC_W - 17, t, 12, icon, ink, fill);
+            } else {
+                GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer cell name centred up/down");
+            }
+            GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
+            cv_text_in(x, t + 14 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
+        } else {
+            int32_t b[4] = {0}, t;
+            icon_ink(12, icon, b);
+            t = y + HALF_UP(h - (12 + 2 + AF_S_CAP_H - b[1])) - b[1];
+            GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V | AL_N(2), "layer cell icon + name centred up/down");
+            cv_icon_on(x + 5, t, 12, icon, ink, fill);
+            GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
+            cv_text_in(x, t + 14 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
+        }
     } else if (name && *name) {                           /* a key's row: the icon and the name on its middle */
         if (!note && icon < ICON_COUNT) {                  /* (the EDIT layer: the engine's icon instead of the key) */
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell icon / name centred up/down");
@@ -1042,15 +1085,40 @@ static void layer_glo(void)
         lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(e, 0), 0, trk[e].p[P_MUTE] ? LS_MUTE : LS_OFF, 0);
     }
 }
-static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
+static void layer_scl(void)                             /* 3x3 vowel picker on tract engines; 4x4 scale picker otherwise */
 {
-    uint32_t i, sc = (uint32_t)TSEL->p[P_SCALE];
-    for (i = 0; i < 16u && i <= (uint32_t)TP[P_SCALE].max; i++) {
-        int32_t x = LC_X(i % 4u), y = 4 + 29 * (int32_t)(i / 4u);
-        uint16_t ink, fill = lc_fill(i == sc ? LS_SEL : LS_OFF, &ink);
-        fill = lc_box(x, y, LC_W, 25, fill);
-        GFX_HOOK_ALIGN(x, y, x + LC_W, y + 25, AL_HV, "scale cell name centred");
-        cv_text_in(x, y + CAP_IN(S, 25), LC_W, &AF_S, TP[P_SCALE].names[i], ink, fill);
+    uint32_t i;
+    if (is_tract_engine(TSEL->eng_req)) {
+        static const uint8_t VC[9][2] = {
+            {0, 0}, {64, 0}, {127, 0},
+            {0, 64}, {64, 64}, {127, 64},
+            {0, 127}, {64, 127}, {127, 127}
+        };
+        static const char *const K_LBL[9] = {"F3", "G3", "A3", "B3", "C4", "D4", "E4", "F4", "G4"};
+        static const char *const V_LBL[9] = {"/i/", "/i-/", "/u/", "/e/", "/@/", "/o/", "/ae/", "/a/", "/ah/"};
+        for (i = 0; i < 9u; i++) {
+            int32_t col = (int32_t)(i % 3u), row = (int32_t)(i / 3u);
+            int32_t x = 6 + 78 * col, y = 4 + 38 * row;
+            int32_t dt = (int32_t)TSEL->p[P_E0] - VC[i][0];
+            int32_t dj = (int32_t)TSEL->p[P_E1] - VC[i][1];
+            uint32_t on = (dt < 0 ? -dt : dt) <= 24 && (dj < 0 ? -dj : dj) <= 24;
+            uint16_t ink, fill = lc_fill(on ? LS_SEL : LS_OFF, &ink);
+            fill = lc_box(x, y, 74, 34, fill);
+            cv_text_on(x + 5, y + 3, &AF_S, K_LBL[i], on ? ink : T_MID, fill);
+            GFX_HOOK_ALIGN(x, y, x + 74, y + 34, AL_H, "vowel cell label centred");
+            cv_text_in(x, y + 17, 74, &AF_S, V_LBL[i], ink, fill);
+        }
+        return;
+    }
+    {
+        uint32_t sc = (uint32_t)TSEL->p[P_SCALE];
+        for (i = 0; i < 16u && i <= (uint32_t)TP[P_SCALE].max; i++) {
+            int32_t x = LC_X(i % 4u), y = 4 + 29 * (int32_t)(i / 4u);
+            uint16_t ink, fill = lc_fill(i == sc ? LS_SEL : LS_OFF, &ink);
+            fill = lc_box(x, y, LC_W, 25, fill);
+            GFX_HOOK_ALIGN(x, y, x + LC_W, y + 25, AL_HV, "scale cell name centred");
+            cv_text_in(x, y + CAP_IN(S, 25), LC_W, &AF_S, TP[P_SCALE].names[i], ink, fill);
+        }
     }
 }
 /* 1.4.1: the engine's quick actions (black keys 1..n) in a row of n cells under the engines, 18 px high, 4 px apart
@@ -1268,7 +1336,8 @@ static void draw_layer(void)
         sig += perf_solo * 31u + (uint32_t)song.g[G_CLOCK] * 5u + ui.ml.on * 7u + seq_fill * 1009u +
                (uint32_t)(trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 131u;
     else if (l == LAYER_SCL)
-        sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
+        sig += (uint32_t)TSEL->p[P_SCALE] * 31u + (uint32_t)TSEL->p[P_E0] * 131u +
+               (uint32_t)TSEL->p[P_E1] * 257u + song.sel * 977u + (uint32_t)TSEL->eng_req * 17u;
     else if (l == LAYER_REC)
         sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)

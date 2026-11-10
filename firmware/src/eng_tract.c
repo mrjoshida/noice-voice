@@ -51,7 +51,11 @@ typedef struct {
 } tract_t;
 ENG_MEM_FITS("TRACT", sizeof(tract_t));
 
+#if NOICE_PROBE
 static int is_tract_engine(uint32_t e) { uint32_t ei = e % NENGINES; return ei >= 5u && ei <= 8u; }
+#else
+static int is_tract_engine(uint32_t e) { (void)e; return 0; }
+#endif
 static tract_t *tr_of(const track_t *t) { return (tract_t *)ENG_MEM((uint32_t)(t - trk) % NPART); }
 
 /* placeholder area functions (cm^2 Q12), glottis -> lips, 22 points (resampled to n): /a/ and /i/ */
@@ -660,7 +664,7 @@ static const param_desc_t *tract_desc(const track_t *t, uint32_t slot)
     static const param_desc_t D_ONSET = {"ONSET", F_ENUM, 0, NV_NONSETS, 0, NV_ONSET_DISP, 0};
     static const param_desc_t D_CODA  = {"CODA",  F_ENUM, 0, NV_NCODAS,  0, NV_CODA_DISP,  0};
     static const char *const BODY_NAMES[] = {"MALE", "FEMALE", "CHILD", 0};
-    static const param_desc_t D_BODY  = {"BODY",  F_ENUM, 0, 2,           0, BODY_NAMES,    0};
+    static const param_desc_t D_BODY  = {"BODY",  F_INT,  0, 127,         0, BODY_NAMES,    0};
     static const char *const CHOIR_NAMES[] = {"1 SOLO", "2 DUET", "3 CHOIR", 0};
     static const param_desc_t D_CHOIR = {"CHOIR", F_ENUM, 0, 2,           0, CHOIR_NAMES,   0};
 

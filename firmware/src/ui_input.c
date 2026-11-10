@@ -1073,15 +1073,22 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (vp == &TSEL->p[P_ATSNS] && !*vp && v)             /* AFTERTOUCH on (1.8): the engine's routing, if none */
         at_turn_on(TSEL);
     *vp = (int16_t)v;
-    if (pg->id[0] == P_END_TONGUE || pg->id[0] == P_ED_FLT || pg->id[0] == P_WALL_Q ||
-        pg->id[0] == P_E5 || (pg->id[0] == P_E0 && !ui.home)) {
-        char mb[32];
+    if (!ui.home && is_tract_engine(TSEL->eng_req) &&
+        (pg->scope == SC_TRACK || pg->scope == SC_ENGINE) && pg->graph == GR_NONE &&
+        (pg->id[0] == P_END_TONGUE || (pg->id[0] == P_ED_FLT && pg->id[3] == P_ED_FX) ||
+         pg->id[0] == P_WALL_Q || pg->id[0] == P_E5 || pg->id[0] == P_E0)) {
+        char mb[32], vb[12];
+        const char *unit = "";
+        uint32_t n;
+        param_format(d, v, vb, &unit);
         str_cpy(mb, d->label, sizeof mb);
-        str_cpy(mb + str_len(mb), " ", sizeof mb - str_len(mb));
-        if (d->fmt == F_ENUM && d->names && v >= d->min && v <= d->max) {
-            str_cpy(mb + str_len(mb), d->names[v - d->min], sizeof mb - str_len(mb));
-        } else {
-            fmt_int(mb + str_len(mb), (int32_t)v);
+        n = str_len(mb);
+        str_cpy(mb + n, " ", sizeof mb - n);
+        n = str_len(mb);
+        str_cpy(mb + n, vb, sizeof mb - n);
+        if (unit && unit[0]) {
+            n = str_len(mb);
+            str_cpy(mb + n, unit, sizeof mb - n);
         }
         ui_message(mb);
     }
@@ -1744,17 +1751,10 @@ static void ui_input(void)
             else
                 transport_req = 1;
             break;
-        case B_ARP: {
-            if (ui.home && is_tract_engine(TSEL->engine)) {
-                tract_t *tr = tr_of(TSEL);
-                nv_artic_respeak(&tr->artic);
-                ui_message("RE-SPEAK");
-            } else {
-                if (!lay)
-                    ui.pg_down |= (uint16_t)(1u << id);
-            }
+        case B_ARP:
+            if (!lay)
+                ui.pg_down |= (uint16_t)(1u << id);
             break;
-        }
         case B_SEQ:
         case B_REC:                                     /* tap: above; held, its layer (ui_layer.c) */
         case B_SAVE:
@@ -1823,24 +1823,10 @@ static void ui_input(void)
     kq |= lay;
     if (!lay && (s = panel_enc(EN_PRESET)) != 0)
         presets_turn(s);
-    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {
-        if (ui.home && is_tract_engine(TSEL->engine)) {
-            TSEL->p[P_E4] = (int16_t)clamp(TSEL->p[P_E4] + s * 4, 0, 127);
-            const char *bm = TSEL->p[P_E4] < 42 ? "BODY: MALE" : TSEL->p[P_E4] < 85 ? "BODY: FEMALE" : "BODY: CHILD";
-            ui_message(bm);
-        } else {
-            track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
-        }
-    }
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0)
+        track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
-        if (!glo && ui.home && is_tract_engine(TSEL->engine)) {
-            tract_t *tr = tr_of(TSEL);
-            tr->artic.breath_base = (uint8_t)clamp((int32_t)tr->artic.breath_base + s * 4, 0, 127);
-            char bmsg[24];
-            str_cpy(bmsg, "BREATH ", sizeof bmsg);
-            fmt_int(bmsg + str_len(bmsg), tr->artic.breath_base);
-            ui_message(bmsg);
-        } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
+        if (!glo && sel_mode() >= SEL_MODW) {            /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE) {   /* MENU > SELECT PAGE (1.5.5, #188): the pages, a detent
                                                          * each (ui.c page_turn); the tempo is GLO + SELECT, CLOCK's

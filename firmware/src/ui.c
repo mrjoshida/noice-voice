@@ -429,7 +429,43 @@ static uint32_t layer_btn(void);
  * track's (its patch's operators, ui_fm6op.c) */
 static int page_visible(uint32_t i)
 {
-    (void)i;
+    const char *t;
+    const engine_t *en;
+    int tract;
+    if (i >= NPAGES)
+        return 0;
+    t = PAGES[i].title;
+    en = ENGINES[eng_idx(TSEL->eng_req)];
+    tract = is_tract_engine(TSEL->eng_req);
+    if (str_eq(t, "MOUTH") || str_eq(t, "END MOUTH") || str_eq(t, "PHONEMES") || str_eq(t, "GLOTTIS") ||
+        str_eq(t, "ENV TIME") || str_eq(t, "END SHAPE") || str_eq(t, "BREATH") || str_eq(t, "VIBRATO") ||
+        str_eq(t, "RESONANCE") || str_eq(t, "SPACE"))
+        return tract;
+    if (tract) {
+        if (str_eq(t, "EDIT 1") || str_eq(t, "EDIT 2") || str_eq(t, "FILTER") || str_eq(t, "LANES") ||
+            str_eq(t, "LANES 2") || str_eq(t, "SLICES") || str_eq(t, "OPERATOR") || str_eq(t, "OP ENV") ||
+            str_eq(t, "OPERATOR 2") || str_eq(t, "OP1 ENV") || str_eq(t, "OP2 ENV") || str_eq(t, "OP3 ENV") ||
+            str_eq(t, "OP4 ENV") || str_eq(t, "OP LEVEL") || str_eq(t, "VOICE") || str_eq(t, "VOICE 2") ||
+            str_eq(t, "VOICE 3") || str_eq(t, "ENV") || str_eq(t, "ENV DEST") || str_eq(t, "FX"))
+            return 0;
+        return 1;
+    }
+    if (str_eq(t, "LANES") || str_eq(t, "LANES 2"))
+        return drum_track(TSEL);
+    if (str_eq(t, "FILTER"))
+        return en == &ENG_ANALOG;
+    if (str_eq(t, "OPERATOR") || str_eq(t, "OP ENV") || str_eq(t, "OPERATOR 2"))
+        return en == &ENG_FM6;
+#if FELUCCA_SLICE
+    if (str_eq(t, "SLICES"))
+        return en == &ENG_SLICE;
+#else
+    if (str_eq(t, "SLICES"))
+        return 0;
+#endif
+    if (str_eq(t, "OP1 ENV") || str_eq(t, "OP2 ENV") || str_eq(t, "OP3 ENV") || str_eq(t, "OP4 ENV") ||
+        str_eq(t, "OP LEVEL"))
+        return FELUCCA_FM4 && eng_idx(TSEL->eng_req) == ENGI_DIGITAL;
     return 1;
 }
 
@@ -437,7 +473,7 @@ static uint32_t page_first(uint32_t fam)
 {
     uint32_t i;
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam)
+        if (PAGES[i].fam == fam && page_visible(i))
             return i;
     return 0;
 }
@@ -791,7 +827,23 @@ static void go_home(void)
  * (ui_input) */
 static void home_tap(void)
 {
-    go_home();
+    if (ui.home) {
+        ui.page = (uint8_t)page_first(FAM_TRK);
+        ui.home = 0;
+        page_entered();
+    } else if (cur_page()->fam == FAM_TRK && cur_page()->graph == GR_TRK) {
+        uint32_t i = ui.page + 1u;
+        while (i < NPAGES && (PAGES[i].fam != FAM_TRK || !page_visible(i)))
+            i++;
+        if (i < NPAGES) {
+            ui.page = (uint8_t)i;
+            page_entered();
+        } else {
+            go_home();
+        }
+    } else {
+        go_home();
+    }
 }
 
 /* MENU > CONTROL > SELECT PAGE (1.5.5, Discussion #188): the SELECT knob steps the pages of the family shown, a detent
@@ -1207,13 +1259,156 @@ static void pat_label(uint32_t n, char *tag, char *name)   /* tag: 4 bytes ("01"
     }
 }
 
+static void nv_pat_motion(track_t *t, uint32_t pat_idx)
+{
+    if (pat_idx >= 8u || !is_tract_engine(t->eng_req))
+        return;
+    motion_reset(t);
+    if (pat_idx == 0u) {
+        /* 01 NOICE: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW" */
+        motion_set_event(t, 0,  P_E5, 8);  motion_set_event(t, 0,  P_E6, 10);
+        motion_set_event(t, 0,  P_E0, 115);motion_set_event(t, 0,  P_E1, 95);
+        motion_set_event(t, 0,  P_END_TONGUE, 10); motion_set_event(t, 0, P_END_JAW, 20);
+        motion_set_event(t, 2,  P_E5, 12);
+        motion_set_event(t, 4,  P_E5, 5);  motion_set_event(t, 4,  P_E6, 2);
+        motion_set_event(t, 4,  P_E0, 15); motion_set_event(t, 4,  P_E1, 120);
+        motion_set_event(t, 4,  P_END_TONGUE, 15); motion_set_event(t, 4, P_END_JAW, 120);
+        motion_set_event(t, 6,  P_E5, 15); motion_set_event(t, 6,  P_E6, 20);
+        motion_set_event(t, 6,  P_E1, 15); motion_set_event(t, 6,  P_END_JAW, 15);
+        motion_set_event(t, 8,  P_E5, 23); motion_set_event(t, 8,  P_E6, 11);
+        motion_set_event(t, 8,  P_E0, 64); motion_set_event(t, 8,  P_E1, 64);
+        motion_set_event(t, 8,  P_END_TONGUE, 64); motion_set_event(t, 8, P_END_JAW, 64);
+        motion_set_event(t, 10, P_E5, 3);  motion_set_event(t, 10, P_E6, 0);
+        motion_set_event(t, 10, P_E0, 120);motion_set_event(t, 10, P_E1, 15);
+        motion_set_event(t, 10, P_END_TONGUE, 120); motion_set_event(t, 10, P_END_JAW, 15);
+        motion_set_event(t, 12, P_E5, 24);
+        motion_set_event(t, 14, P_E5, 8);  motion_set_event(t, 14, P_E0, 64);
+        motion_set_event(t, 14, P_E1, 120);motion_set_event(t, 14, P_END_JAW, 20);
+    } else if (pat_idx == 1u) {
+        /* 02 MADE AIR: "BREATHE IN BREATHE OUT I AM MADE OF AIR" */
+        motion_set_event(t, 0,  P_E5, 2);  motion_set_event(t, 0,  P_E6, 15);
+        motion_set_event(t, 0,  P_E0, 10); motion_set_event(t, 0,  P_E1, 20);
+        motion_set_event(t, 2,  P_E5, 19); motion_set_event(t, 2,  P_E6, 2);
+        motion_set_event(t, 2,  P_E1, 30);
+        motion_set_event(t, 4,  P_E5, 2);  motion_set_event(t, 4,  P_E6, 15);
+        motion_set_event(t, 4,  P_E1, 20);
+        motion_set_event(t, 6,  P_E5, 0);  motion_set_event(t, 6,  P_E6, 19);
+        motion_set_event(t, 6,  P_E0, 64); motion_set_event(t, 6,  P_E1, 110);
+        motion_set_event(t, 6,  P_END_TONGUE, 110); motion_set_event(t, 6, P_END_JAW, 25);
+        motion_set_event(t, 8,  P_E6, 0);
+        motion_set_event(t, 8,  P_END_TONGUE, 10); motion_set_event(t, 8, P_END_JAW, 20);
+        motion_set_event(t, 10, P_E6, 1);  motion_set_event(t, 10, P_E0, 15);
+        motion_set_event(t, 10, P_E1, 115);motion_set_event(t, 10, P_END_TONGUE, 15);
+        motion_set_event(t, 10, P_END_JAW, 115);
+        motion_set_event(t, 12, P_E5, 7);  motion_set_event(t, 12, P_E6, 22);
+        motion_set_event(t, 12, P_E1, 65); motion_set_event(t, 12, P_END_JAW, 65);
+        motion_set_event(t, 14, P_E5, 28); motion_set_event(t, 14, P_E6, 6);
+        motion_set_event(t, 14, P_E0, 40); motion_set_event(t, 14, P_E1, 60);
+    } else if (pat_idx == 2u) {
+        /* 03 OGRE: "DEEP CAVE OGRES ROAR AND CRUSH ROCK" */
+        motion_set_event(t, 0,  P_E5, 4);  motion_set_event(t, 0,  P_E6, 18);
+        motion_set_event(t, 0,  P_E0, 5);  motion_set_event(t, 0,  P_E1, 15);
+        motion_set_event(t, 2,  P_E5, 5);  motion_set_event(t, 2,  P_E6, 17);
+        motion_set_event(t, 2,  P_E0, 15); motion_set_event(t, 2,  P_E1, 70);
+        motion_set_event(t, 4,  P_E5, 37); motion_set_event(t, 4,  P_E6, 0);
+        motion_set_event(t, 4,  P_E0, 115);
+        motion_set_event(t, 6,  P_E5, 6);  motion_set_event(t, 6,  P_E6, 11);
+        motion_set_event(t, 6,  P_E0, 64); motion_set_event(t, 6,  P_E1, 90);
+        motion_set_event(t, 8,  P_E5, 35); motion_set_event(t, 8,  P_E6, 7);
+        motion_set_event(t, 8,  P_E0, 120);motion_set_event(t, 8,  P_E1, 95);
+        motion_set_event(t, 10, P_E5, 38); motion_set_event(t, 10, P_E6, 2);
+        motion_set_event(t, 10, P_E0, 15); motion_set_event(t, 10, P_E1, 115);
+        motion_set_event(t, 12, P_E5, 5);  motion_set_event(t, 12, P_E6, 12);
+        motion_set_event(t, 12, P_E0, 64); motion_set_event(t, 12, P_E1, 70);
+        motion_set_event(t, 14, P_E5, 27); motion_set_event(t, 14, P_E6, 20);
+        motion_set_event(t, 14, P_E0, 80); motion_set_event(t, 14, P_E1, 120);
+    } else if (pat_idx == 3u) {
+        /* 04 ELF SONG: "SILVER LIGHT SHINES IN FAIRY GLADE" */
+        motion_set_event(t, 0,  P_E5, 15); motion_set_event(t, 0,  P_E6, 5);
+        motion_set_event(t, 0,  P_E0, 10); motion_set_event(t, 0,  P_E1, 20);
+        motion_set_event(t, 2,  P_E5, 12); motion_set_event(t, 2,  P_E6, 8);
+        motion_set_event(t, 2,  P_E0, 64); motion_set_event(t, 2,  P_E1, 60);
+        motion_set_event(t, 4,  P_E5, 25); motion_set_event(t, 4,  P_E6, 19);
+        motion_set_event(t, 4,  P_E1, 115);
+        motion_set_event(t, 4,  P_END_TONGUE, 10); motion_set_event(t, 4, P_END_JAW, 20);
+        motion_set_event(t, 6,  P_E5, 17); motion_set_event(t, 6,  P_E6, 11);
+        motion_set_event(t, 8,  P_E5, 0);  motion_set_event(t, 8,  P_E6, 2);
+        motion_set_event(t, 8,  P_E0, 15); motion_set_event(t, 8,  P_E1, 25);
+        motion_set_event(t, 8,  P_END_TONGUE, 15);
+        motion_set_event(t, 10, P_E5, 11); motion_set_event(t, 10, P_E6, 0);
+        motion_set_event(t, 10, P_E1, 65);
+        motion_set_event(t, 12, P_E5, 26); motion_set_event(t, 12, P_E1, 15);
+        motion_set_event(t, 14, P_E5, 6);  motion_set_event(t, 14, P_E6, 22);
+        motion_set_event(t, 14, P_E1, 70);
+    } else if (pat_idx == 4u) {
+        /* 05 BOOTS: "BOOTS AND CATS" Beatbox */
+        motion_set_event(t, 0,  P_E5, 39); motion_set_event(t, 0,  P_E6, 10);
+        motion_set_event(t, 2,  P_E5, 41); motion_set_event(t, 2,  P_E6, 0);
+        motion_set_event(t, 4,  P_E5, 40); motion_set_event(t, 4,  P_E6, 10);
+        motion_set_event(t, 6,  P_E5, 41); motion_set_event(t, 6,  P_E6, 0);
+        motion_set_event(t, 8,  P_E5, 44); motion_set_event(t, 8,  P_E6, 10);
+        motion_set_event(t, 10, P_E5, 43); motion_set_event(t, 10, P_E6, 0);
+        motion_set_event(t, 12, P_E5, 42); motion_set_event(t, 12, P_E6, 10);
+        motion_set_event(t, 14, P_E5, 41); motion_set_event(t, 14, P_E6, 0);
+    } else if (pat_idx == 5u) {
+        /* 06 CLICKS: "CLICKS AND POPS" Vocal Percussion */
+        motion_set_event(t, 0,  P_E5, 39); motion_set_event(t, 0,  P_E6, 0);
+        motion_set_event(t, 2,  P_E5, 43); motion_set_event(t, 2,  P_E0, 90);  motion_set_event(t, 2, P_E1, 50);
+        motion_set_event(t, 4,  P_E5, 44); motion_set_event(t, 4,  P_E0, 30);  motion_set_event(t, 4, P_E1, 20);
+        motion_set_event(t, 6,  P_E5, 43); motion_set_event(t, 6,  P_E0, 110); motion_set_event(t, 6, P_E1, 40);
+        motion_set_event(t, 8,  P_E5, 39);
+        motion_set_event(t, 9,  P_E5, 41);
+        motion_set_event(t, 11, P_E5, 42);
+        motion_set_event(t, 12, P_E5, 44); motion_set_event(t, 12, P_E0, 20);  motion_set_event(t, 12, P_E1, 90);
+        motion_set_event(t, 14, P_E5, 40); motion_set_event(t, 14, P_E6, 10);
+        motion_set_event(t, 15, P_E5, 43);
+    } else if (pat_idx == 6u) {
+        /* 07 RETRO: "RED ROADS RUN ROUND RETRO RIVERS" */
+        motion_set_event(t, 0,  P_E5, 27); motion_set_event(t, 0,  P_E6, 22);
+        motion_set_event(t, 0,  P_E0, 15); motion_set_event(t, 0,  P_E1, 65);
+        motion_set_event(t, 2,  P_E5, 28); motion_set_event(t, 2,  P_E6, 11);
+        motion_set_event(t, 2,  P_E0, 120);
+        motion_set_event(t, 4,  P_E5, 29); motion_set_event(t, 4,  P_E6, 2);
+        motion_set_event(t, 4,  P_E0, 64); motion_set_event(t, 4,  P_E1, 80);
+        motion_set_event(t, 6,  P_E5, 27); motion_set_event(t, 6,  P_E1, 115);
+        motion_set_event(t, 6,  P_END_TONGUE, 115); motion_set_event(t, 6, P_END_JAW, 25);
+        motion_set_event(t, 8,  P_E5, 32); motion_set_event(t, 8,  P_E6, 0);
+        motion_set_event(t, 8,  P_E0, 15); motion_set_event(t, 8,  P_E1, 65);
+        motion_set_event(t, 8,  P_END_TONGUE, 15);
+        motion_set_event(t, 10, P_E5, 27); motion_set_event(t, 10, P_E0, 120);
+        motion_set_event(t, 12, P_E5, 26); motion_set_event(t, 12, P_E0, 10);
+        motion_set_event(t, 12, P_E1, 20);
+        motion_set_event(t, 14, P_E5, 12); motion_set_event(t, 14, P_E6, 11);
+        motion_set_event(t, 14, P_E0, 64); motion_set_event(t, 14, P_E1, 60);
+    } else if (pat_idx == 7u) {
+        /* 08 CHOIR: Harmonic Vowel Cathedral */
+        motion_set_event(t, 0,  P_E7, 2);  motion_set_event(t, 0,  P_E5, 19);
+        motion_set_event(t, 0,  P_E6, 0);  motion_set_event(t, 0,  P_E0, 64);
+        motion_set_event(t, 0,  P_E1, 120);motion_set_event(t, 0,  P_E3, 30);
+        motion_set_event(t, 2,  P_E5, 0);  motion_set_event(t, 2,  P_E0, 120);
+        motion_set_event(t, 2,  P_E1, 60); motion_set_event(t, 2,  P_E3, 60);
+        motion_set_event(t, 4,  P_E1, 15); motion_set_event(t, 4,  P_E3, 0);
+        motion_set_event(t, 6,  P_E0, 5);  motion_set_event(t, 6,  P_E3, 40);
+        motion_set_event(t, 8,  P_E5, 7);  motion_set_event(t, 8,  P_E6, 1);
+        motion_set_event(t, 8,  P_E0, 15); motion_set_event(t, 8,  P_E1, 70);
+        motion_set_event(t, 8,  P_E3, 80);
+        motion_set_event(t, 10, P_E5, 0);  motion_set_event(t, 10, P_E6, 0);
+        motion_set_event(t, 10, P_E0, 64); motion_set_event(t, 10, P_E1, 64);
+        motion_set_event(t, 10, P_E3, 20);
+        motion_set_event(t, 12, P_E0, 10); motion_set_event(t, 12, P_E1, 120);
+        motion_set_event(t, 14, P_E0, 120);motion_set_event(t, 14, P_E3, 50);
+    }
+}
+
 static void pat_load(track_t *t, uint32_t n)
 {
     load_begin(t, UNDO_PAT);
-    if (n < NPATTERNS)
+    if (n < NPATTERNS) {
         load_pat16(t, PATTERNS[n].note, PATTERNS[n].flags);
-    else
+        nv_pat_motion(t, n);
+    } else {
         up_pat_load(t, up_pat_nth(n - NPATTERNS));
+    }
     pat_sig[trk_index(t)] = steps_sig(t);
     pat_last[trk_index(t)] = (uint8_t)(n + 1u);
     pat_from[trk_index(t)] = 0;                     /* (a phrase: no PROJECT slot) */

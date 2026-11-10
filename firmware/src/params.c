@@ -92,6 +92,7 @@ static const char *const N_SLOT[] = {"A", "B", "C", "D", 0};   /* G_SLOT 1..4 (F
 static const param_desc_t TP[P_COUNT] = {
     [P_LEVEL] = PD("LVL", F_DB, 0, 127, 104),
     [P_ATK] = PD("ATK", F_TIME, 0, 127, 10),
+#if NOICE_PROBE
     [P_DEC] = PD("BREATH", F_PCT, 0, 127, 90),
     [P_SUS] = PD("TENSION", F_PCT, 0, 127, 64),
     [P_REL] = PD("REL", F_TIME, 0, 127, 60),
@@ -107,6 +108,15 @@ static const param_desc_t TP[P_COUNT] = {
     [P_TRACT_LEN] = PD("LENGTH", F_PCT, 0, 127, 64),
     [P_TRACHEA] = PD("TRACHEA", F_PCT, 0, 127, 0),
     [P_NASAL_Q] = PD("NASAL Q", F_PCT, 0, 127, 64),
+#else
+    [P_DEC] = PD("DEC", F_TIME, 0, 127, 70),
+    [P_SUS] = PD("SUS", F_PCT, 0, 127, 90),
+    [P_REL] = PD("REL", F_TIME, 0, 127, 60),
+    [P_ED_FLT] = PD("FLT", F_BIPCT, -64, 63, 0),
+    [P_ED_PIT] = PD("PIT", F_BIPCT, -64, 63, 0),
+    [P_ED_SHP] = PD("SHP", F_BIPCT, -64, 63, 0),
+    [P_ED_FX] = PD("FX", F_BIPCT, -64, 63, 0),
+#endif
     [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 60),
     [P_LWAVE] = PE("WAVE", N_LWAVE, 0),
     [P_LPHASE] = PD("PHS", F_INT, 0, 127, 0),
@@ -469,29 +479,77 @@ typedef struct {
 } page_t;
 
 static const page_t PAGES[] = {
-    /* EDIT */
+    /* EDIT (vocal tract pages first; hidden automatically on non-tract engines) */
     {"MOUTH",     FAM_EDIT, SC_ENGINE, GR_NONE,   {P_E0, P_E1, P_E2, P_E3}},
     {"END MOUTH", FAM_EDIT, SC_TRACK,  GR_NONE,   {P_END_TONGUE, P_END_JAW, P_END_LIPS, P_END_VELUM}},
     {"PHONEMES",  FAM_EDIT, SC_TRACK,  GR_NONE,   {P_E5, P_E6, P_E4, P_E7}},
     {"GLOTTIS",   FAM_EDIT, SC_TRACK,  GR_NONE,   {P_SUS, P_DEC, P_ATSNS, P_VOICE}},
+    {"EDIT 1",    FAM_EDIT, SC_ENGINE, GR_NONE,   {P_E0, P_E1, P_E2, P_E3}},
+    {"EDIT 2",    FAM_EDIT, SC_ENGINE, GR_NONE,   {P_E4, P_E5, P_E6, P_E7}},
+    {"FILTER",    FAM_EDIT, SC_TRACK,  GR_NONE,   {P_FTYPE, P_E4, P_E5, P_E7}},
+    {"LANES",     FAM_EDIT, SC_TRACK,  GR_NONE,   {P_LN0, P_LN1, P_LN2, P_LN3}},
+    {"LANES 2",   FAM_EDIT, SC_TRACK,  GR_NONE,   {P_LN4, P_LN5, P_LN6, P_LN7}},
+    {"SLICES",    FAM_EDIT, SC_TRACK,  GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"OPERATOR",  FAM_EDIT, SC_TRACK,  GR_FMOP,   {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"OP ENV",    FAM_EDIT, SC_TRACK,  GR_FMENV,  {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"OPERATOR 2",FAM_EDIT, SC_TRACK,  GR_FMOP2,  {0xFF, 0xFF, 0xFF, 0xFF}},
+#if !NOICE_PROBE
+    {"OP1 ENV",   FAM_EDIT, SC_TRACK,  GR_ADSR,   {P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL}},
+    {"OP2 ENV",   FAM_EDIT, SC_TRACK,  GR_ADSR,   {P_FM2_ATK, P_FM2_DEC, P_FM2_SUS, P_FM2_REL}},
+#endif
+    {"OP3 ENV",   FAM_EDIT, SC_TRACK,  GR_ADSR,   {P_FM3_ATK, P_FM3_DEC, P_FM3_SUS, P_FM3_REL}},
+    {"OP4 ENV",   FAM_EDIT, SC_TRACK,  GR_ADSR,   {P_FM4_ATK, P_FM4_DEC, P_FM4_SUS, P_FM4_REL}},
+    {"OP LEVEL",  FAM_EDIT, SC_TRACK,  GR_NONE,   {P_FM1_LEVEL, P_FM2_LEVEL, P_FM3_LEVEL, P_FM4_LEVEL}},
+    {"VOICE",     FAM_EDIT, SC_TRACK,  GR_NONE,   {P_VOICE, P_GLIDE, P_GLMODE, P_PRIO}},
+    {"VOICE 2",   FAM_EDIT, SC_TRACK,  GR_NONE,   {P_ALLOC, P_DETUNE, P_PAN, P_MUTE}},
+    {"VOICE 3",   FAM_EDIT, SC_TRACK,  GR_NONE,   {P_SPRD, P_ATSNS, P_ATDST, P_ATAMT}},
     /* ENV */
     {"ENV TIME",  FAM_ENV,  SC_TRACK,  GR_NONE,   {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ED_FX}},
     {"END SHAPE", FAM_ENV,  SC_TRACK,  GR_NONE,   {P_END_TONGUE, P_END_JAW, P_END_LIPS, P_END_VELUM}},
     {"BREATH",    FAM_ENV,  SC_TRACK,  GR_NONE,   {P_ATK, P_REL, P_SUS, P_DEC}},
+    {"ENV",       FAM_ENV,  SC_TRACK,  GR_ADSR,   {P_ATK, P_DEC, P_SUS, P_REL}},
+    {"ENV DEST",  FAM_ENV,  SC_TRACK,  GR_NONE,   {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ESYNC}},
+    /* LFO / MOD */
+    {"VIBRATO",   FAM_LFO,  SC_TRACK,  GR_NONE,   {P_LD_PIT, P_LRATE, P_LFADE, P_GLIDE}},
+    {"LFO",       FAM_LFO,  SC_TRACK,  GR_LFO,    {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
+    {"LFO 2",     FAM_LFO,  SC_TRACK,  GR_LFO,    {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},
+    {"LFO DEST",  FAM_LFO,  SC_TRACK,  GR_NONE,   {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
+    {"MOD",       FAM_LFO,  SC_TRACK,  GR_MOD,    {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},
     /* FX */
     {"RESONANCE", FAM_FX,   SC_TRACK,  GR_NONE,   {P_WALL_Q, P_TRACT_LEN, P_TRACHEA, P_NASAL_Q}},
     {"SPACE",     FAM_FX,   SC_TRACK,  GR_FX,     {P_DIST, P_CHOR, P_DLY, P_REV}},
-    /* LFO */
-    {"VIBRATO",   FAM_LFO,  SC_TRACK,  GR_NONE,   {P_LD_PIT, P_LRATE, P_LFADE, P_GLIDE}},
+    {"FX",        FAM_FX,   SC_TRACK,  GR_FX,     {P_DIST, P_CHOR, P_DLY, P_REV}},
+    {"SLICER",    FAM_FX,   SC_TRACK,  GR_SLCR,   {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
+    {"INSERT",    FAM_FX,   SC_TRACK,  GR_INS,    {P_ITYPE, P_IA, P_IB, P_IC}},
+    {"INSERT 2",  FAM_FX,   SC_TRACK,  GR_INS,    {P_IMIX, 0xFF, 0xFF, 0xFF}},
+    {"DLY",       FAM_FX,   SC_GLOBAL, GR_NONE,   {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
+    {"REVERB",    FAM_FX,   SC_GLOBAL, GR_NONE,   {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},
+    {"CHORUS",    FAM_FX,   SC_GLOBAL, GR_NONE,   {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
     /* SCL */
+#if NOICE_PROBE
     {"SCALE",     FAM_SCL,  SC_TRACK,  GR_SCALE,  {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
+#else
+    {"SCL",       FAM_SCL,  SC_TRACK,  GR_SCALE,  {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
+#endif
+    {"CHORD",     FAM_SCL,  SC_TRACK,  GR_CHORD,  {P_CHRD, P_VOIC, 0xFF, 0xFF}},
+    /* GLO */
+    {"SONG",      FAM_GLO,  SC_GLOBAL, GR_SONG,   {0xFF, 0xFF, 0xFF, 0xFF}},
+    /* SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS */
+    {"USER",      FAM_SAVE, SC_GLOBAL, GR_USER,   {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"PRESETS",   FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"PHRASES",   FAM_SAVE, SC_GLOBAL, GR_PATS,   {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"PROJECT",   FAM_SAVE, SC_GLOBAL, GR_SLOTS,  {G_SLOT, 0xFF, G_LOAD, G_SAVE}},
+    {"TOOLS",     FAM_SAVE, SC_GLOBAL, GR_TOOLS,  {G_CLRSEQ, G_INITSND, 0xFF, 0xFF}},
+    /* ARP */
+    {"ARP",       FAM_ARP,  SC_TRACK,  GR_ARP,    {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
+    {"ARP 2",     FAM_ARP,  SC_TRACK,  GR_NONE,   {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
     /* SEQ */
     {"STEP",      FAM_SEQ,  SC_STEP,   GR_ROLL,   {0, 1, 2, 3}},
-    /* SAVE */
-    {"PRESETS",   FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},
-    {"USER",      FAM_SAVE, SC_GLOBAL, GR_USER,   {0xFF, 0xFF, 0xFF, 0xFF}},
-    /* GLO */
-    {"SYSTEM",    FAM_GLO,  SC_GLOBAL, GR_TOOLS,  {0xFF, 0xFF, 0xFF, 0xFF}},
+    {"DETAIL",    FAM_SEQ,  SC_STEP,   GR_ROLL,   {0, 1, 2, 3}},
+    {"AUTOMATION",FAM_SEQ,  SC_TRACK,  GR_EVENTS, {0xFF, 0xFF, 0xFF, 0xFF}},
+    /* HOME */
+    {"MIXER",     FAM_TRK,  SC_TRK,    GR_TRK,    {0, 1, 2, 3}},
+    {"CLOCK",     FAM_TRK,  SC_GLOBAL, GR_NONE,   {G_BPM, G_SWING, G_CLOCK, 0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */

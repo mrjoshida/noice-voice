@@ -99,6 +99,9 @@ int main(int argc, char **argv) {
     artic.jaw = 64;
     artic.lips = 100;
     artic.velum = 0;
+    artic.cur_tongue = 64;
+    artic.cur_jaw = 64;
+    artic.cur_lips = 512 + artic.lips * 120;
     artic.state = SYLL_NUCLEUS;
 
     int32_t pres[44] = {0};
@@ -106,7 +109,8 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 22; i++) {
         pres[i] = (i % 4 == 0) ? 3500 : 800;
     }
-    int16_t params[8] = {64, 64, 100, 0, 0, 0, 0, 0};
+    int16_t params[20] = {64, 64, 100, 0};
+    params[P_END_TONGUE] = 64; params[P_END_JAW] = 64; params[P_END_LIPS] = 100; params[P_END_VELUM] = 0;
 
     /* Strip 0: 0..89 */
     nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, NULL, 0);
@@ -122,6 +126,8 @@ int main(int argc, char **argv) {
     /* Test vowel /i/ corner with message */
     artic.tongue = 0;
     artic.jaw = 0;
+    artic.cur_tongue = 0;
+    artic.cur_jaw = 0;
     params[0] = 0;
     params[1] = 0;
     nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, "/i/", 1);
@@ -130,8 +136,19 @@ int main(int argc, char **argv) {
     save_ppm("build/test_out/nv_view_vowel_i.ppm", screen, 240, 240);
     printf("nv_view_test: saved build/test_out/nv_view_vowel_i.ppm\n");
 
+    /* Test ENV trajectory visualizer (mode 2) */
+    int16_t env_params[20] = {0};
+    env_params[P_E0] = 10; env_params[P_E1] = 15; env_params[P_E2] = 20; env_params[P_E3] = 0;
+    env_params[P_END_TONGUE] = 115; env_params[P_END_JAW] = 110; env_params[P_END_LIPS] = 110; env_params[P_END_VELUM] = 40;
+    env_params[P_ENV_SPEED] = 48; env_params[P_ENV_HOLD] = 32; env_params[P_ENV_RET] = 64; env_params[P_ENV_MODE] = 2;
+    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, env_params, NULL, NV_VIEW_ENV);
+    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, env_params, NULL, NV_VIEW_ENV);
+    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, env_params, NULL, NV_VIEW_ENV);
+    save_ppm("build/test_out/nv_view_env.ppm", screen, 240, 240);
+    printf("nv_view_test: saved build/test_out/nv_view_env.ppm\n");
+
     /* Test RESONANCE visualizer (mode 3) */
-    int16_t res_params[16] = {0};
+    int16_t res_params[20] = {0};
     res_params[P_WALL_Q] = 90;
     res_params[P_TRACT_LEN] = 80;
     res_params[P_TRACHEA] = 100;
@@ -141,6 +158,15 @@ int main(int argc, char **argv) {
     nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, res_params, NULL, 3);
     save_ppm("build/test_out/nv_view_resonance.ppm", screen, 240, 240);
     printf("nv_view_test: saved build/test_out/nv_view_resonance.ppm\n");
+
+    /* Test PHONEMES visualizer (mode 4) with retroflex R-RET */
+    int16_t ph_params[20] = {0};
+    ph_params[P_E4] = 40; ph_params[P_E5] = 27; ph_params[P_E6] = 7; ph_params[P_E7] = 1;
+    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, ph_params, NULL, NV_VIEW_PHONEMES);
+    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, ph_params, NULL, NV_VIEW_PHONEMES);
+    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, ph_params, NULL, NV_VIEW_PHONEMES);
+    save_ppm("build/test_out/nv_view_phonemes.ppm", screen, 240, 240);
+    printf("nv_view_test: saved build/test_out/nv_view_phonemes.ppm\n");
 
     printf("nv_view_test: all ok!\n");
     return 0;

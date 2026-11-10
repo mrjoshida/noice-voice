@@ -18,6 +18,10 @@ enum {
     NV_VIEW_PHONEMES  = 4,  /* PHONEMES: ONSET, CODA, BODY, CHOIR */
 };
 
+/* Palette flags OR'd into view_mode upper nibble */
+#define NV_VIEW_GREY 0x10u  /* GREY palette: RGB565 neutral gray levels (R == B, G == 2R) */
+#define NV_VIEW_BW   0x20u  /* MONO palette: high-contrast black, white, UI_BW_GREY */
+
 /* Render one horizontal strip (e.g. 240 x strip_h at screen offset strip_y)
  * buf: pointer to 240 * strip_h uint16_t RGB565 pixels (byte-swapped for ST7789) */
 void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
