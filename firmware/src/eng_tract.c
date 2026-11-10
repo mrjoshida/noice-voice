@@ -20,6 +20,9 @@
  *
  * State: one tract per part in the part's engine memory (engine_t.mem); the engine is mono (poly 1). */
 
+#include "nv_artic.h"
+#include "nv_artic.c"
+
 #define TR_NMAX 44u              /* oral sections at 2x (17.5 cm / (c / 88.2 kHz)) */
 #define TR_NNMAX 28u             /* nasal sections at 2x */
 #define TR_Q 14                  /* reflection coefficients: Q14 */
@@ -29,6 +32,7 @@
 #define TR_NGLOT 3u              /* CHOIR: glottal sources through one tract */
 
 typedef struct {
+    nv_artic_t artic;            /* articulator & syllable state machine */
     int32_t R[TR_NMAX], L[TR_NMAX], k[TR_NMAX];
     int32_t nR[TR_NNMAX], nL[TR_NNMAX], nk[TR_NNMAX];
     int32_t A[TR_NMAX];          /* areas, cm^2 Q12 */
@@ -36,9 +40,11 @@ typedef struct {
     int32_t gref, lref, nref;    /* end reflections with the guide's losses lumped in (Q14) */
     int32_t jacc, nlast;         /* MODE 2X N1: the nose's junction input held over a step, its last output */
     uint32_t gph[TR_NGLOT];      /* glottal phases */
+    uint32_t sub_ph;             /* subharmonic phase for TROLL growl */
     int32_t tilt[TR_NGLOT];      /* source low-pass */
     int32_t nz, nf1, nf2;        /* noise: xorshift, its band-pass state */
     int32_t dc_x, dc_y;          /* output DC blocker */
+    uint8_t creature;            /* CREATURE_HUMAN, TROLL, ELF, BEAST */
     uint8_t n, nn, ns, os;       /* oral sections, nasal sections, nasal junction index, oversampling */
     uint8_t nsite;               /* noise injection section */
     int32_t ngain;               /* noise gain at the site (Q15) */
@@ -71,16 +77,20 @@ static int32_t tr_refl(int32_t a, int32_t b)
 static void tr_control(tract_t *tr, const int16_t *p)
 {
     uint32_t i, n = tr->n, nn = tr->nn;
-    int32_t vow = p[P_E0] * 258, lips = 512 + p[P_E7] * 120, vel = p[P_E4] * 64, amin = 0x7FFFFFFF;
-    for (i = 0; i < n; i++) {                              /* resample the 22-point shapes onto n sections */
-        uint32_t x = (i * 21u << 8) / (n - 1u), j = x >> 8, f = x & 255u, j1 = j < 21u ? j + 1u : 21u;
-        int32_t a = TR_SHAPE_A[j] + (((TR_SHAPE_A[j1] - TR_SHAPE_A[j]) * (int32_t)f) >> 8);
-        int32_t b = TR_SHAPE_I[j] + (((TR_SHAPE_I[j1] - TR_SHAPE_I[j]) * (int32_t)f) >> 8);
-        a += ((b - a) * vow) >> 15;
-        if (i + 3u >= n)                                   /* the last three sections: the lips */
-            a = (a * lips) >> 14;
+    int32_t vel = tr->artic.cur_velum, amin = 0x7FFFFFFF;
+    int32_t tlen = p ? clamp(p[P_TRACT_LEN], 0, 127) : 64;
+    int32_t len_scale = 160 + ((tlen * 190) >> 7); /* 160 (short, ~0.62x) .. 350 (long, ~1.37x), 256 is nominal */
+    for (i = 0; i < n; i++) {
+        int32_t x_raw = ((int32_t)i * 21 * 256) / (int32_t)(n - 1u);
+        int32_t x = (x_raw * 256) / len_scale;
+        if (x < 0) x = 0;
+        if (x > 21 * 256) x = 21 * 256;
+        uint32_t j = (uint32_t)(x >> 8);
+        uint32_t f = (uint32_t)(x & 255);
+        uint32_t j1 = j < 21u ? j + 1u : 21u;
+        int32_t a = tr->artic.cur_areas[j] + (((tr->artic.cur_areas[j1] - tr->artic.cur_areas[j]) * (int32_t)f) >> 8);
         if (a < 41)
-            a = 41;                                        /* 0.01 cm^2: closed, but not a hard wall */
+            a = 41;                                        /* 0.01 cm^2 floor */
         tr->A[i] = a;
         if (i > 1u && i + 1u < n && a < amin) {
             amin = a;
@@ -101,9 +111,13 @@ static void tr_control(tract_t *tr, const int16_t *p)
         tr->jr = (int32_t)(((int64_t)(2 * ar - s) << TR_Q) / s);
         tr->jn = (int32_t)(((int64_t)(2 * an - s) << TR_Q) / s);
     }
-    {   /* turbulence: louder the narrower the constriction (a Reynolds-number stand-in) */
+    {   /* turbulence: louder the narrower the constriction */
         int32_t g = amin < 1229 ? (1229 - amin) * 26 : 0;  /* below 0.3 cm^2 */
-        tr->ngain = (g * p[P_E3]) >> 7;
+        tr->ngain = (g * tr->artic.noise_amt) >> 7;
+    }
+    {   /* Nasal branch reflection (NASAL Q) */
+        int32_t nq = p ? clamp(p[P_NASAL_Q], 0, 127) : 64;
+        tr->nref = -8000 - ((nq * 8200) >> 7);
     }
 }
 
@@ -192,121 +206,464 @@ static void tract_setup(tract_t *tr, uint32_t mode)
         tr->nR[i] = tr->nL[i] = 0;
     if (!tr->nz)
         tr->nz = 0x2545F491;
+    tr->sub_ph = 0;
+    if (tr->artic.state == SYLL_IDLE)
+        nv_artic_init(&tr->artic);
+}
+
+static void tract_sync_creature(tract_t *tr, uint32_t eng)
+{
+    uint32_t e = eng < NENGINES ? eng : 0u;
+    if (e == 6)
+        tr->creature = CREATURE_TROLL;
+    else if (e == 7)
+        tr->creature = CREATURE_ELF;
+    else if (e == 8)
+        tr->creature = CREATURE_BEAST;
+    else
+        tr->creature = CREATURE_HUMAN;
+    tr->artic.creature = tr->creature;
 }
 
 static void tract_note_on(track_t *t, voice_t *v)
 {
     tract_t *tr = tr_of(t);
     uint32_t i;
-    (void)v;
-    if (!v->env && !v->env_out) {                          /* from rest: the folds start closed */
+    uint8_t legato = (v->active && (v->stage == 1 || v->stage == 2));
+    if (tr->os != 1u || !tr->n)
+        tract_setup(tr, 0u);
+    tract_sync_creature(tr, t->engine);
+    nv_artic_note_on(&tr->artic, legato);
+    if (!legato) {                          /* from rest: the folds start closed */
         for (i = 0; i < TR_NGLOT; i++) {
             tr->gph[i] = 0;
             tr->tilt[i] = 0;
         }
+        tr->sub_ph = 0;
     }
 }
 
-/* CHOIR's intervals (Q16): the root, a major third, a fifth (the probe; the instrument takes the held notes) */
+/* CHOIR's intervals (Q16): the root, a major third, a fifth */
 static const uint32_t TR_CHOIR_Q16[TR_NGLOT] = {65536u, 82570u, 98193u};
 
 static void tract_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     tract_t *tr = tr_of(t);
     const int16_t *p = t->p;
-    uint32_t mode = (uint32_t)clamp(p[P_E1], 0, 2), os = mode ? 2u : 1u, ng = 1u + (uint32_t)clamp(p[P_E2], 0, 2), i, j;
-    uint32_t inc[TR_NGLOT], te, tp, rp, rn;
-    int32_t oq, tiltk, gv, gn, nst;
-    (void)v;
-    if (tr->os != mode + 1u || !tr->n)
-        tract_setup(tr, mode);
+    uint32_t ng = 1u + (uint32_t)clamp(p[P_E7], 0, 2), i, j;
+    uint32_t base_inc, inc[TR_NGLOT], te, tp, rp, rn;
+    int32_t oq, tiltk, gv, gn, nst, brth;
+
+    if (tr->os != 1u || !tr->n)
+        tract_setup(tr, 0u);
+
+    tract_sync_creature(tr, t->engine);
+
+    /* Update articulator parameters: Start Mouth Shape */
+    tr->artic.tongue = (uint8_t)clamp(p[P_E0], 0, 127);
+    tr->artic.jaw = (uint8_t)clamp(p[P_E1], 0, 127);
+    tr->artic.lips = (uint8_t)clamp(p[P_E2], 0, 127);
+    tr->artic.velum = (uint8_t)clamp(p[P_E3], 0, 127);
+    tr->artic.body = (uint8_t)clamp(p[P_E4], 0, 127);
+    tr->artic.onset_idx = (uint8_t)clamp(p[P_E5], 0, NV_NONSETS);
+    tr->artic.coda_idx = (uint8_t)clamp(p[P_E6], 0, NV_NCODAS);
+    tr->artic.key_pressure = t->at;
+
+    /* Target Mouth Shape (End Shape on ENV Page 2) */
+    tr->artic.end_tongue = (uint8_t)clamp(p[P_END_TONGUE], 0, 127);
+    tr->artic.end_jaw = (uint8_t)clamp(p[P_END_JAW], 0, 127);
+    tr->artic.end_lips = (uint8_t)clamp(p[P_END_LIPS], 0, 127);
+    tr->artic.end_velum = (uint8_t)clamp(p[P_END_VELUM], 0, 127);
+
+    /* Articulatory Envelope Dynamics (ENV Page 1: SPEED, HOLD, RETURN, MODE) */
+    {
+        uint32_t spd = (uint32_t)clamp(p[P_ENV_SPEED], 0, 127);
+        uint32_t hld = (uint32_t)clamp(p[P_ENV_HOLD], 0, 127);
+        uint32_t ret = (uint32_t)clamp(p[P_ENV_RET], 0, 127);
+        tr->artic.speed_ms = 5u + ((spd * spd * 2995u) >> 14);     /* 5 .. 3000 ms */
+        tr->artic.hold_ms = ((hld * hld * 3000u) >> 14);           /* 0 .. 3000 ms */
+        tr->artic.return_ms = 5u + ((ret * ret * 2995u) >> 14);   /* 5 .. 3000 ms */
+        tr->artic.morph_mode = (uint8_t)clamp(p[P_ENV_MODE], 0, 3); /* 0: GLIDE, 1: RETURN, 2: BOUNCE, 3: TOUCH */
+    }
+
+    /* Breath / Phonation Envelope (ENV Page 3: ATK, REL, TENSION, BREATH) */
+    {
+        uint32_t atk = (uint32_t)clamp(p[P_ATK], 0, 127);
+        uint32_t rel = (uint32_t)clamp(p[P_REL], 0, 127);
+        tr->artic.attack_ms = 2u + ((atk * atk * 1998u) >> 14);    /* 2 .. 2000 ms */
+        tr->artic.release_ms = 5u + ((rel * rel * 2995u) >> 14);   /* 5 .. 3000 ms */
+        tr->artic.tension = (uint8_t)clamp(p[P_SUS], 0, 127);      /* TENSION */
+        tr->artic.breath_base = (uint8_t)clamp(p[P_DEC], 0, 127);  /* BREATH */
+    }
+
+    if (!v->gate && !tr->artic.hold_on)
+        nv_artic_note_off(&tr->artic);
+
+    nv_artic_update(&tr->artic, n);
     tr_control(tr, p);
+
+    /* Pitch scaling per creature */
+    base_inc = m->inc;
+    if (tr->creature == CREATURE_TROLL) {
+        base_inc = base_inc >> 1;                                  /* 1 octave down: subterranean chest fundamental */
+    } else if (tr->creature == CREATURE_ELF) {
+        base_inc = (base_inc < 0x7FFFFFFFu) ? (base_inc << 1) : base_inc; /* 1 octave up: singing fundamental */
+    }
+
     for (j = 0; j < ng; j++)
-        inc[j] = (uint32_t)(((uint64_t)m->inc * TR_CHOIR_Q16[j]) >> 16);
-    oq = 58982 - ((p[P_E5] * 284));                        /* TENSION: open quotient 0.90 .. 0.35 (Q16) */
-    tiltk = 2500 + p[P_E5] * 109;
+        inc[j] = (uint32_t)(((uint64_t)base_inc * TR_CHOIR_Q16[j]) >> 16);
+
+    if (tr->creature == CREATURE_BEAST) {
+        /* Predatory cycle-to-cycle frequency flutter / shimmer */
+        int32_t jit = (int32_t)(noise32(&tr->nz) & 255u) - 128;
+        for (j = 0; j < ng; j++)
+            inc[j] = (uint32_t)((int32_t)inc[j] + (((int32_t)inc[j] * jit) >> 13));
+    }
+
+    /* Acoustic Cavity: Wall damping / Q */
+    {
+        int32_t wall_q = clamp(p[P_WALL_Q], 0, 127);
+        int32_t gref_base = 10000 + ((wall_q * 6300) >> 7); /* 10000 (~0.61) .. 16300 (~0.995) */
+
+        if (tr->creature == CREATURE_TROLL) {
+            oq = 54000 - (((int32_t)tr->artic.tension * 200));
+            tiltk = 1100 + (int32_t)tr->artic.tension * 60;
+            tr->gref = (gref_base * 7) >> 3;                    /* subglottal heavy tissue absorption */
+            tr->lref = -(gref_base + 600);
+        } else if (tr->creature == CREATURE_ELF) {
+            oq = 62000 - (((int32_t)tr->artic.tension * 160));
+            tiltk = 3600 + (int32_t)tr->artic.tension * 130;
+            tr->gref = gref_base > 12000 ? gref_base : 12000;   /* ringing silver vocal tract */
+            tr->lref = -(tr->gref + 800);
+        } else if (tr->creature == CREATURE_BEAST) {
+            oq = 51000 - (((int32_t)tr->artic.tension * 260));
+            tiltk = 3100 + (int32_t)tr->artic.tension * 100;
+            tr->gref = gref_base;
+            tr->lref = -(gref_base + 800);
+        } else { /* CREATURE_HUMAN */
+            oq = 58982 - (((int32_t)tr->artic.tension * 284)); /* TENSION: open quotient */
+            tiltk = 2500 + (int32_t)tr->artic.tension * 109;
+            tr->gref = gref_base;
+            tr->lref = -(gref_base + 800);
+        }
+        if (tr->lref < -16300) tr->lref = -16300;
+        if (tr->gref > 16340) tr->gref = 16340;
+    }
+
     te = (uint32_t)oq << 16;
     tp = (te >> 8) * 166u;
     rp = (1u << 30) / ((tp >> 16) | 1u);
     rn = (1u << 30) / (((te - tp) >> 16) | 1u);
-    gv = 2048 - p[P_E6] * 12;                              /* voicing level (the input headroom) */
-    gn = p[P_E6] * 8;                                      /* BREATH: aspiration */
-    nst = tr->nz;
-    for (i = 0; i < n; i++) {
-        int32_t g = 0, a, s, nzs = 0, y;
-        for (j = 0; j < ng; j++) {                         /* the sources: derivative of a Rosenberg pulse */
-            uint32_t ph = tr->gph[j];
-            int32_t e;
-            if (ph < tp)
-                e = (sine_i(((ph >> 16) * rp) << 1) * 17644) >> 15;
-            else if (ph < te)
-                e = -sine_i(((ph - tp) >> 16) * rn);
-            else
-                e = 0;
-            e += blep(ph - te, inc[j]) >> 1;
-            tr->tilt[j] += ((e - tr->tilt[j]) * tiltk) >> 14;
-            g += tr->tilt[j];
-            tr->gph[j] = ph + inc[j];
+
+    brth = tr->artic.cur_breath;                        /* 0..32767 */
+    if (brth < 400 || tr->artic.whisper_on) {
+        gv = 0;                                         /* unvoiced or below phonation threshold */
+        gn = (brth * 6) >> 15;
+    } else {
+        if (tr->creature == CREATURE_TROLL) {
+            gv = (brth * 3400) >> 15;
+            gn = (brth * (int32_t)tr->artic.noise_amt) >> 13;
+        } else if (tr->creature == CREATURE_ELF) {
+            gv = (brth * 2600) >> 15;
+            gn = (brth * ((int32_t)tr->artic.noise_amt + 32)) >> 11; /* silver breath */
+        } else if (tr->creature == CREATURE_BEAST) {
+            gv = (brth * 3200) >> 15;
+            gn = (brth * ((int32_t)tr->artic.noise_amt + 48)) >> 11; /* snarling breath */
+        } else {
+            gv = (brth * 3000) >> 15;                       /* voicing level */
+            gn = (brth * (int32_t)tr->artic.noise_amt) >> 12;/* aspiration */
         }
-        g = (g * gv) >> 15;
-        {
-            int32_t w = (int32_t)(noise32(&nst) >> 17) - 16384;
-            g += (w * gn) >> 15;                           /* aspiration at the glottis */
-            if (tr->ngain) {                               /* turbulence: a band-pass on the same noise */
-                tr->nf1 += (w - tr->nf1) >> 2;
-                tr->nf2 += (tr->nf1 - tr->nf2) >> 3;
-                nzs = ((tr->nf1 - tr->nf2) * tr->ngain) >> 15;
+    }
+
+    {
+        int32_t trach_coupling = clamp(p[P_TRACHEA], 0, 127);
+        int32_t growl_dist = clamp(p[P_DIST], 0, 127);
+        nst = tr->nz;
+        for (i = 0; i < n; i++) {
+            int32_t g = 0, a, s, nzs = 0, y;
+            for (j = 0; j < ng; j++) {                      /* the sources: derivative of a Rosenberg pulse */
+                uint32_t ph = tr->gph[j];
+                int32_t e;
+                if (ph < tp)
+                    e = (sine_i(((ph >> 16) * rp) << 1) * 17644) >> 15;
+                else if (ph < te)
+                    e = -sine_i(((ph - tp) >> 16) * rn);
+                else
+                    e = 0;
+                e += blep(ph - te, inc[j]) >> 1;
+
+                if (trach_coupling > 0 && ph < te) {
+                    /* Subglottal tracheal coupling resonance rings through open glottis */
+                    e += (sine_i((ph >> 14) * 3) * (trach_coupling * 40)) >> 15;
+                }
+
+                if (tr->creature == CREATURE_BEAST) {
+                    /* Non-linear vocal fold overdrive / asymmetric saturation */
+                    int32_t sat = (e * 7) >> 2;
+                    if (sat > 13000)
+                        e = 13000 + ((sat - 13000) >> 3);
+                    else if (sat < -13000)
+                        e = -13000 + ((sat + 13000) >> 3);
+                    else
+                        e = sat;
+                }
+
+                tr->tilt[j] += ((e - tr->tilt[j]) * tiltk) >> 14;
+                g += tr->tilt[j];
+                tr->gph[j] = ph + inc[j];
             }
-        }
-        {   /* tr_step lives in RAM, beyond a direct jump from XIP: one pointer per block (bsp FL_FAR's way) */
-            int32_t (*volatile vstep)(tract_t *, int32_t, int32_t, uint32_t) = tr_step;
-            int32_t (*step)(tract_t *, int32_t, int32_t, uint32_t) = vstep;
-            if (os == 2u)
-                a = (step(tr, g, nzs, mode == 1u ? 2u : 0u) + step(tr, g, nzs, mode == 1u ? 2u : 1u)) >> 1;
-            else
+
+            if (tr->creature == CREATURE_TROLL) {
+                /* Subharmonic ventricular fold growl at f0/2 */
+                uint32_t sph = tr->sub_ph;
+                int32_t sub_pulse = (sine_i(sph >> 15) * 5500) >> 15;
+                g += sub_pulse;
+                tr->sub_ph = sph + (inc[0] >> 1);
+            }
+
+            if (growl_dist > 0) {
+                /* Fold overdrive / saturation */
+                int32_t drive = 128 + growl_dist * 3;
+                int32_t sat = (g * drive) >> 7;
+                g = soft_knee(clamp(sat, -30000, 30000), 16000);
+            }
+
+            g = (g * gv) >> 15;
+            {
+                int32_t w = (int32_t)(noise32(&nst) >> 17) - 16384;
+                g += (w * gn) >> 15;                        /* aspiration at the glottis */
+                if (tr->ngain) {                            /* turbulence: a band-pass on the same noise */
+                    tr->nf1 += (w - tr->nf1) >> 2;
+                    tr->nf2 += (tr->nf1 - tr->nf2) >> 3;
+                    nzs = ((tr->nf1 - tr->nf2) * tr->ngain) >> 15;
+                    if (tr->creature == CREATURE_BEAST)
+                        nzs = (nzs * 5) >> 2;               /* predator raspy turbulence */
+                }
+            }
+            {
+                int32_t (*volatile vstep)(tract_t *, int32_t, int32_t, uint32_t) = tr_step;
+                int32_t (*step)(tract_t *, int32_t, int32_t, uint32_t) = vstep;
                 a = step(tr, g, nzs, 2u);
+            }
+            s = soft_knee(clamp(a << 3, -32000, 32000), 20000);
+            y = s - tr->dc_x + ((tr->dc_y * 32604 + 16384) >> 15);   /* DC blocker, ~10 Hz */
+            tr->dc_x = s;
+            tr->dc_y = y;
+            out[i] += voice_amp(y, m, i);
         }
-        y = a - tr->dc_x + ((tr->dc_y * 32604 + 16384) >> 15);   /* DC blocker, ~10 Hz (rounded: a floor here */
-        tr->dc_x = a;                                            /* leaves a standing offset of 100 LSB) */
-        tr->dc_y = y;
-        s = soft_knee(clamp(y << 2, -200000, 200000), 24000);
-        out[i] += voice_amp(s, m, i) << 1;
     }
     tr->nz = nst;
 }
 
-static const char *const TR_MODE[] = {"1X 22", "2X 44", "2X N1"};
-
-static const preset_t TRACT_PRESETS[] = {
-    /* VOWEL MODE CHOIR NOISE | TENSE BREATH VELUM LIPS; MIDI Program Change 0..5 (scripts/fm1_probe.py) */
-    {"PROBE AH", {0, 1, 0, 0, 64, 10, 0, 100}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
-    {"PROBE WORST", {64, 1, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
-    {"WORST 1X", {64, 0, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
-    {"SOLO 2X", {64, 1, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
-    {"SOLO 1X", {64, 0, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
-    {"AH 1X", {0, 0, 0, 0, 64, 10, 0, 100}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
-    {"SOLO 2XN1", {64, 2, 0, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
-    {"WORST 2XN1", {64, 2, 2, 127, 64, 60, 90, 20}, {4, 70, 110, 60}, 0, 1, FX(0, 40, 40, 90), 0},
+/* ------------------------------------------------ Human Presets & Engine --- */
+static const preset_t HUMAN_PRESETS[] = {
+    /* TONGUE JAW LIPS VELUM | BODY ONSET CODA CHOIR; env: {ATK, DEC, SUS, REL}; fenv: TARGET */
+    {"AH MALE",    {70,  115, 100, 0,  0,   0, 0, 0}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"WEE",        {115, 15,  20,  0,  0,   0, 0, 0}, {4, 70, 110, 60}, 1, 1, FX(0, 0, 0, 40), 0},
+    {"YOU",        {10,  10,  100, 0,  0,   0, 0, 0}, {4, 70, 110, 60}, 2, 1, FX(0, 0, 0, 40), 0},
+    {"WHY",        {70,  115, 100, 0,  0,   0, 0, 0}, {4, 70, 110, 60}, 1, 1, FX(0, 0, 0, 40), 0},
+    {"NOISE",      {115, 64,  35,  0,  0,   3, 0, 0}, {4, 70, 110, 60}, 1, 1, FX(0, 0, 0, 40), 0},
+    {"MA-MA",      {64,  50,  0,   80, 0,   2, 0, 0}, {4, 70, 110, 60}, 3, 1, FX(0, 0, 0, 40), 0},
+    {"LA-LA",      {70,  115, 100, 0,  0,   7, 0, 0}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
+    {"CHOIR 3",    {70,  80,  100, 0,  0,   0, 0, 2}, {4, 70, 110, 60}, 0, 1, FX(0, 0, 0, 40), 0},
 };
 
-static const engine_t ENG_TRACT = {
-    .name = "TRACT",
+/* ------------------------------------------------ Troll Presets & Engine --- */
+static const preset_t TROLL_PRESETS[] = {
+    {"DEEP GROWL", {50,  120, 80,  0,  0,   0, 0, 0}, {10, 80, 115, 70}, 0, 1, FX(20, 0, 0, 50), 0},
+    {"CAVE ROAR",  {90,  127, 110, 0,  0,   0, 0, 0}, {8,  90, 120, 80}, 3, 1, FX(30, 0, 20, 60), 0},
+    {"GUTTURAL",   {30,  90,  60,  40, 0,   0, 0, 0}, {6,  70, 110, 60}, 0, 1, FX(15, 0, 0, 40), 0},
+    {"BOULDER",    {20,  60,  40,  0,  0,   0, 0, 0}, {12, 80, 120, 90}, 2, 1, FX(25, 0, 10, 50), 0},
+    {"OGRE WA",    {40,  40,  30,  0,  0,   1, 0, 0}, {6,  70, 110, 60}, 3, 1, FX(10, 0, 0, 40), 0},
+    {"TOMB",       {64,  80,  70,  60, 0,   0, 0, 0}, {20, 90, 120, 100}, 0, 1, FX(0, 0, 40, 80), 0},
+    {"GIANT LA",   {80,  120, 90,  0,  0,   7, 0, 0}, {8,  70, 110, 60}, 0, 1, FX(20, 0, 0, 50), 0},
+    {"WAR CHANT",  {64,  100, 90,  0,  0,   0, 0, 2}, {8,  80, 115, 70}, 0, 1, FX(20, 15, 0, 60), 0},
+};
+
+/* ------------------------------------------------ Elf Presets & Engine --- */
+static const preset_t ELF_PRESETS[] = {
+    {"SILVER",     {120, 20,  30,  0,  100, 0, 0, 0}, {6,  60, 100, 50}, 1, 1, FX(0, 30, 15, 60), 0},
+    {"AIRY WE",    {30,  15,  25,  0,  80,  1, 0, 0}, {8,  70, 105, 60}, 1, 1, FX(0, 25, 20, 70), 0},
+    {"SPELL",      {100, 30,  60,  0,  90,  0, 0, 0}, {4,  60, 100, 50}, 4, 1, FX(0, 40, 25, 65), 0},
+    {"WHISPER",    {64,  40,  50,  20, 127, 0, 0, 0}, {10, 50, 90,  50}, 0, 1, FX(0, 20, 30, 80), 0},
+    {"CHIME",      {125, 10,  20,  0,  110, 0, 0, 0}, {2,  40, 80,  40}, 0, 1, FX(0, 50, 20, 50), 0},
+    {"FAIRY",      {110, 25,  40,  0,  120, 0, 0, 0}, {3,  50, 90,  40}, 2, 1, FX(0, 30, 10, 60), 0},
+    {"MOONLIGHT",  {70,  35,  60,  0,  90,  0, 0, 0}, {15, 80, 110, 80}, 0, 1, FX(0, 35, 40, 90), 0},
+    {"HIGH CHOIR", {115, 25,  40,  0,  100, 0, 0, 2}, {8,  70, 110, 70}, 0, 1, FX(0, 40, 30, 80), 0},
+};
+
+/* ------------------------------------------------ Beast Presets & Engine --- */
+static const preset_t BEAST_PRESETS[] = {
+    {"SNARL",      {110, 80,  50,  0,  0,   3, 0, 0}, {2,  60, 110, 40}, 0, 1, FX(40, 0, 0, 30), 0},
+    {"PREDATOR",   {90,  50,  30,  0,  0,   4, 0, 0}, {4,  70, 115, 50}, 0, 1, FX(50, 0, 10, 40), 0},
+    {"HOWL",       {40,  30,  20,  0,  0,   1, 0, 0}, {12, 90, 120, 80}, 3, 1, FX(30, 0, 25, 60), 0},
+    {"GUTTURAL",   {20,  100, 70,  50, 0,   0, 0, 0}, {6,  80, 115, 60}, 0, 1, FX(45, 0, 0, 35), 0},
+    {"BITE",       {100, 10,  10,  0,  0,   0, 0, 0}, {1,  40, 70,  20}, 3, 1, FX(35, 0, 0, 25), 0},
+    {"FRENZY",     {115, 70,  40,  0,  0,   2, 0, 0}, {3,  50, 100, 30}, 1, 1, FX(60, 0, 0, 40), 0},
+    {"CHITIN",     {125, 40,  20,  0,  0,   5, 0, 0}, {1,  30, 60,  20}, 0, 1, FX(30, 0, 10, 30), 0},
+    {"PACK",       {80,  70,  60,  0,  0,   0, 0, 2}, {5,  70, 110, 50}, 0, 1, FX(40, 20, 15, 50), 0},
+};
+
+typedef struct {
+    uint8_t end_tongue, end_jaw, end_lips, end_velum;
+    uint8_t speed, hold, ret, mode;
+    uint8_t wall_q, tract_len, trachea, nasal_q;
+} tract_preset_ext_t;
+
+static const tract_preset_ext_t TRACT_PRESET_EXT[4][8] = {
+    /* CREATURE_HUMAN */
+    {
+        {85, 55, 30, 0,  50, 20, 45, 1,  64, 64, 30, 0},
+        {40, 10, 15, 0,  40, 10, 40, 0,  70, 60, 10, 0},
+        {90, 20, 15, 0,  45, 15, 45, 0,  64, 64, 20, 0},
+        {70, 115, 100, 0,35, 25, 40, 1,  64, 64, 25, 0},
+        {70, 115, 100, 0,30, 10, 30, 2,  64, 64, 40, 80},
+        {70, 115, 100, 0,25, 15, 25, 2,  64, 64, 20, 0},
+        {90, 110, 90, 0, 50, 0,  50, 3,  80, 64, 30, 0},
+        {80, 70, 80, 0,  60, 30, 60, 2,  90, 64, 35, 0},
+    },
+    /* CREATURE_TROLL */
+    {
+        {30, 90, 40, 0,  60, 20, 50, 1,  30, 110, 90, 0},
+        {40, 60, 30, 0,  70, 40, 60, 1,  40, 120, 100, 0},
+        {20, 40, 20, 20, 40, 10, 40, 2,  35, 115, 80, 40},
+        {10, 20, 10, 0,  80, 30, 70, 1,  25, 127, 110, 0},
+        {80, 120, 100, 0,45, 20, 45, 2,  45, 105, 70, 0},
+        {50, 60, 50, 80, 90, 50, 80, 1,  50, 125, 85, 90},
+        {30, 50, 20, 0,  50, 15, 50, 2,  40, 115, 95, 0},
+        {85, 90, 70, 0,  55, 25, 55, 2,  55, 100, 75, 0},
+    },
+    /* CREATURE_ELF */
+    {
+        {100, 15, 60, 0, 40, 20, 40, 2,  110, 20, 0, 0},
+        {110, 30, 70, 0, 50, 10, 45, 0,  100, 25, 5, 0},
+        {40, 20, 20, 0,  35, 25, 35, 1,  115, 15, 0, 0},
+        {90, 30, 40, 10, 45, 15, 45, 2,  90,  30, 0, 70},
+        {115, 15, 40, 0, 30, 10, 30, 1,  125, 10, 0, 0},
+        {60, 15, 15, 0,  40, 20, 40, 3,  105, 20, 0, 0},
+        {105, 20, 30, 0, 70, 30, 60, 1,  120, 22, 5, 0},
+        {100, 20, 30, 0, 50, 30, 50, 2,  110, 18, 0, 0},
+    },
+    /* CREATURE_BEAST */
+    {
+        {90, 40, 20, 0,  30, 15, 30, 2,  60, 50, 30, 0},
+        {115, 90, 70, 0, 40, 20, 35, 1,  70, 55, 40, 0},
+        {10, 15, 100, 0, 80, 40, 70, 1,  80, 65, 50, 0},
+        {40, 60, 30, 20, 35, 10, 35, 2,  50, 75, 60, 60},
+        {80, 110, 90, 0, 20, 10, 20, 1,  65, 45, 20, 0},
+        {70, 90, 60, 0,  25, 5,  25, 2,  75, 50, 45, 0},
+        {100, 20, 10, 0, 20, 10, 20, 3,  95, 35, 10, 0},
+        {60, 40, 30, 0,  50, 25, 50, 2,  70, 60, 35, 0},
+    },
+};
+
+static void tract_preset_apply(track_t *t, uint32_t pi)
+{
+    uint32_t eng = t->engine < NENGINES ? t->engine : 0u;
+    uint32_t ci = (eng >= 5u && eng <= 8u) ? (eng - 5u) : 0u;
+    const tract_preset_ext_t *ext;
+    if (pi >= 8u) pi = 0u;
+    ext = &TRACT_PRESET_EXT[ci][pi];
+    t->p[P_END_TONGUE] = ext->end_tongue;
+    t->p[P_END_JAW]    = ext->end_jaw;
+    t->p[P_END_LIPS]   = ext->end_lips;
+    t->p[P_END_VELUM]  = ext->end_velum;
+    t->p[P_ENV_SPEED]  = ext->speed;
+    t->p[P_ENV_HOLD]   = ext->hold;
+    t->p[P_ENV_RET]    = ext->ret;
+    t->p[P_ENV_MODE]   = ext->mode;
+    t->p[P_WALL_Q]     = ext->wall_q;
+    t->p[P_TRACT_LEN]  = ext->tract_len;
+    t->p[P_TRACHEA]    = ext->trachea;
+    t->p[P_NASAL_Q]    = ext->nasal_q;
+}
+
+static const engine_t ENG_HUMAN = {
+    .name = "HUMAN",
     .page_title = {"MOUTH", "VOICE"},
     .edit = {
-        {"VOWEL", F_INT, 0, 127, 0, 0, 0},
-        {"MODE", F_ENUM, 0, 2, 1, TR_MODE, 0},
-        {"CHOIR", F_INT, 0, 2, 0, 0, 0},
-        {"NOISE", F_PCT, 0, 127, 0, 0, 0},
-        {"TENSE", F_PCT, 0, 127, 64, 0, 0},
-        {"BRTH", F_PCT, 0, 127, 10, 0, 0},
-        {"VELUM", F_PCT, 0, 127, 0, 0, 0},
+        {"TONGUE", F_PCT, 0, 127, 64, 0, 0},
+        {"JAW", F_PCT, 0, 127, 64, 0, 0},
         {"LIPS", F_PCT, 0, 127, 100, 0, 0},
+        {"VELUM", F_PCT, 0, 127, 0, 0, 0},
+        {"BODY", F_PCT, 0, 127, 0, 0, 0},
+        {"ONSET", F_INT, 0, NV_NONSETS, 0, 0, 0},
+        {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
+        {"CHOIR", F_INT, 0, 2, 0, 0, 0},
     },
-    .presets = TRACT_PRESETS,
-    .npresets = NELEM(TRACT_PRESETS),
+    .presets = HUMAN_PRESETS,
+    .npresets = NELEM(HUMAN_PRESETS),
     .note_on = tract_note_on,
     .render = tract_render,
-    .knob = {P_E0, P_E7, P_E6, P_E2},
+    .knob = {P_E0, P_E1, P_E2, P_E3},
     .poly = 1,
     .mem = sizeof(tract_t),
 };
+
+static const engine_t ENG_TROLL = {
+    .name = "TROLL",
+    .page_title = {"MOUTH", "VOICE"},
+    .edit = {
+        {"TONGUE", F_PCT, 0, 127, 64, 0, 0},
+        {"JAW", F_PCT, 0, 127, 64, 0, 0},
+        {"LIPS", F_PCT, 0, 127, 100, 0, 0},
+        {"VELUM", F_PCT, 0, 127, 0, 0, 0},
+        {"BODY", F_PCT, 0, 127, 0, 0, 0},
+        {"ONSET", F_INT, 0, NV_NONSETS, 0, 0, 0},
+        {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
+        {"CHOIR", F_INT, 0, 2, 0, 0, 0},
+    },
+    .presets = TROLL_PRESETS,
+    .npresets = NELEM(TROLL_PRESETS),
+    .note_on = tract_note_on,
+    .render = tract_render,
+    .knob = {P_E0, P_E1, P_E2, P_E3},
+    .poly = 1,
+    .mem = sizeof(tract_t),
+};
+
+static const engine_t ENG_ELF = {
+    .name = "ELF",
+    .page_title = {"MOUTH", "VOICE"},
+    .edit = {
+        {"TONGUE", F_PCT, 0, 127, 64, 0, 0},
+        {"JAW", F_PCT, 0, 127, 64, 0, 0},
+        {"LIPS", F_PCT, 0, 127, 100, 0, 0},
+        {"VELUM", F_PCT, 0, 127, 0, 0, 0},
+        {"BODY", F_PCT, 0, 127, 0, 0, 0},
+        {"ONSET", F_INT, 0, NV_NONSETS, 0, 0, 0},
+        {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
+        {"CHOIR", F_INT, 0, 2, 0, 0, 0},
+    },
+    .presets = ELF_PRESETS,
+    .npresets = NELEM(ELF_PRESETS),
+    .note_on = tract_note_on,
+    .render = tract_render,
+    .knob = {P_E0, P_E1, P_E2, P_E3},
+    .poly = 1,
+    .mem = sizeof(tract_t),
+};
+
+static const engine_t ENG_BEAST = {
+    .name = "BEAST",
+    .page_title = {"MOUTH", "VOICE"},
+    .edit = {
+        {"TONGUE", F_PCT, 0, 127, 64, 0, 0},
+        {"JAW", F_PCT, 0, 127, 64, 0, 0},
+        {"LIPS", F_PCT, 0, 127, 100, 0, 0},
+        {"VELUM", F_PCT, 0, 127, 0, 0, 0},
+        {"BODY", F_PCT, 0, 127, 0, 0, 0},
+        {"ONSET", F_INT, 0, NV_NONSETS, 0, 0, 0},
+        {"CODA", F_INT, 0, NV_NCODAS, 0, 0, 0},
+        {"CHOIR", F_INT, 0, 2, 0, 0, 0},
+    },
+    .presets = BEAST_PRESETS,
+    .npresets = NELEM(BEAST_PRESETS),
+    .note_on = tract_note_on,
+    .render = tract_render,
+    .knob = {P_E0, P_E1, P_E2, P_E3},
+    .poly = 1,
+    .mem = sizeof(tract_t),
+};
+
+#define ENG_TRACT ENG_HUMAN

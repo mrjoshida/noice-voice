@@ -64,13 +64,16 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_LOFI,                   /* 3 */
     &ENG_SAMPLE,                 /* 4 */
 #if NOICE_PROBE
-    &ENG_TRACT,                  /* 5: the probe build plays TRACT where VOICE was (same slot, no renumbering) */
+    &ENG_HUMAN,                  /* 5: HUMAN */
+    &ENG_TROLL,                  /* 6: TROLL */
+    &ENG_ELF,                    /* 7: ELF */
+    &ENG_BEAST,                  /* 8: BEAST */
 #else
     &ENG_FORMANT,                /* 5 VOICE (eng_formant.c: "voice" is a sounding note in voice.c) */
-#endif
     &ENG_TRIO,                   /* 6 */
     &ENG_WHEEL,                  /* 7 */
     &ENG_GRAIN,                  /* 8 */
+#endif
     &ENG_PHYS,                   /* 9 (ENGI_PHYS) */
     &ENG_DRUM,                   /* 10 (ENGI_DRUM) */
     &ENG_NOISE,                  /* 11 */
@@ -129,6 +132,14 @@ static const char *snd_missing(const track_t *t, uint32_t *code)
 /* the order the engines are shown in (PRESETS browsing and its ENG knob, the EDIT layer's keys, the editor's list):
  * engine indices, never DIGITAL's reserved 1 (with FELUCCA_FM4 it follows FM6). The indices stay as they are (the
  * stores and the protocol hold them); only this table orders them */
+#if NOICE_PROBE
+static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
+    5,                           /* HUMAN */
+    6,                           /* TROLL */
+    7,                           /* ELF */
+    8,                           /* BEAST */
+};
+#else
 static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     0,                           /* ANALOG */
     12,                          /* FM6 */
@@ -145,16 +156,21 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     14,                          /* ADPCM (1.8): last, so the EDIT layer's white keys keep the 13 above (ui_layer.c LY_ENG_KEYS) */
 #endif
 };
+#endif
 
 /* the engines one can pick (engine 1 only with FELUCCA_FM4), in ENGINE_ORDER: eng_ok(e), the n-th of them
  * eng_vis(n), e's place among them eng_rank(e), the next / previous one eng_step(e, dir) (wraps) */
+#if NOICE_PROBE
+static int eng_ok(uint32_t e) { return e >= 5u && e <= 8u; }
+#else
 static int eng_ok(uint32_t e) { return e < NENGINES && (FELUCCA_FM4 || e != ENGI_DIGITAL); }
+#endif
 static uint32_t eng_vis(uint32_t n) { return ENGINE_ORDER[n % NENG_SHOWN]; }
 static uint32_t eng_rank(uint32_t e)
 {
     uint32_t n;
     if (!eng_ok(e))
-        e = ENGI_FM6;                            /* (DIGITAL without FELUCCA_FM4: its sounds play as FM6) */
+        e = 5u;                                  /* Default to HUMAN */
     for (n = 0; n < NENG_SHOWN && ENGINE_ORDER[n] != e; n++)
         ;
     return n < NENG_SHOWN ? n : 0u;
@@ -208,8 +224,8 @@ static const struct {
 #define NPATTERNS (sizeof PATTERNS / sizeof PATTERNS[0])
 
 /* the parts at power-on (engine, preset, PATTERNS[n - 1] in the sequencer, 0 = empty: all are): bass, pad, lead, drums */
-#if NOICE_PROBE                     /* the probe: part 1 plays TRACT (VOICE's slot) PROBE WORST from power-on */
-static const uint8_t TRK_DEF[NPART][3] = {{5, 1, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}};
+#if NOICE_PROBE                     /* NOICE VOICE: 4 parts default to HUMAN, TROLL, ELF, BEAST */
+static const uint8_t TRK_DEF[NPART][3] = {{5, 0, 0}, {6, 0, 0}, {7, 0, 0}, {8, 0, 0}};
 #else
 static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}}; /* ANALOG ACID,
                                                                        * FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT */

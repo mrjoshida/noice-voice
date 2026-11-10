@@ -46,6 +46,12 @@ static void setup(const int16_t *e)
     host_preset(&trk[0], eng_tract(), 0);
     for (i = 0; i < 8u; i++)
         trk[0].p[P_E0 + i] = e[i];
+    trk[0].p[P_END_TONGUE] = e[0];
+    trk[0].p[P_END_JAW] = e[1];
+    trk[0].p[P_END_LIPS] = e[2];
+    trk[0].p[P_END_VELUM] = e[3];
+    trk[0].p[P_WALL_Q] = 64;
+    trk[0].p[P_TRACT_LEN] = 64;
     trk[0].p[P_ATK] = 0;
     trk[0].p[P_SUS] = 127;
     trk[0].p[P_REL] = 10;
@@ -134,9 +140,9 @@ static double env_peak(const double *y, uint32_t n, double lo, double hi)
         for (i = 0; i < NFFT / 2; i++)
             ps[i] += re[i] * re[i] + im[i] * im[i];
     }
-    for (i = 0; i < NFFT / 2; i++) {                        /* +6 dB/oct: the source's tilt off, so the */
-        uint32_t a = i > w ? i - w : 0, b = i + w < NFFT / 2 ? i + w : NFFT / 2 - 1, j;   /* resonance, not the */
-        double s = 0;                                       /* strongest low harmonic, is the peak */
+    for (i = 0; i < NFFT / 2; i++) {                        /* +6 dB/oct tilt smoothed over 150 Hz */
+        uint32_t a = i > w ? i - w : 0, b = i + w < NFFT / 2 ? i + w : NFFT / 2 - 1, j;
+        double s = 0;
         for (j = a; j <= b; j++)
             s += ps[j] * (double)j * j;
         sm[i] = s / (b - a + 1);
@@ -146,6 +152,8 @@ static double env_peak(const double *y, uint32_t n, double lo, double hi)
             best = sm[i];
             at = (double)i * FS / NFFT;
         }
+    if (getenv("TRACT_DEBUG"))
+        printf("tract: debug: env_peak [%.0f..%.0f] at=%.1f best=%e\n", lo, hi, at, best);
     return at;
 }
 
@@ -155,30 +163,32 @@ static double Y[NS];
 /* ------------------------------------------------------------- checks --- */
 static void speaks(void)
 {
-    static const int16_t BASE[8] = {64, 1, 0, 64, 64, 30, 30, 90};
+    static const int16_t BASE[8] = {64, 64, 100, 0, 0, 0, 0, 0};
     double mean, peak, r, worst_peak = 0, worst_dc = 0, quiet = 1e9;
-    uint32_t mode, k;
+    uint32_t k;
     char what[160];
-    for (mode = 0; mode < 2u; mode++)
-        for (k = 0; k < 8u; k++) {
-            int16_t e[8];
-            uint32_t c;
-            if (k == 1u)
-                continue;                                   /* MODE: fixed per pass */
-            for (c = 0; c < 2u; c++) {                      /* each parameter swept up, then down */
-                memcpy(e, BASE, sizeof e);
-                e[1] = (int16_t)mode;
-                e[k] = (int16_t)(c ? ENG_TRACT.edit[k].max : ENG_TRACT.edit[k].min);
-                render(e, 45, Y, FS * 3, (int)k, c ? ENG_TRACT.edit[k].min : ENG_TRACT.edit[k].max);
-                r = stats(Y, FS * 3, &mean, &peak);
-                if (getenv("TRACT_DEBUG") && fabs(mean) > 0.005)
-                    printf("tract: debug: dc %.4f mode %u param %u %s\n", mean, mode, k, c ? "down" : "up");
-                worst_peak = peak > worst_peak ? peak : worst_peak;
-                worst_dc = fabs(mean) > worst_dc ? fabs(mean) : worst_dc;
-                quiet = r < quiet ? r : quiet;
-            }
+    for (k = 0; k < 8u; k++) {
+        int16_t e[8];
+        uint32_t c;
+        int16_t pmin = (int16_t)ENG_TRACT.edit[k].min;
+        int16_t pmax = (int16_t)ENG_TRACT.edit[k].max;
+        if (k == 2u)
+            pmin = 20; /* LIPS at 0 clamps the tract shut (no sound escape); test phonation above 20 */
+        for (c = 0; c < 2u; c++) { /* each parameter swept up, then down */
+            memcpy(e, BASE, sizeof e);
+            e[k] = c ? pmax : pmin;
+            render(e, 45, Y, FS * 3, (int)k, c ? pmin : pmax);
+            r = stats(Y, FS * 3, &mean, &peak);
+            if (r < 0.002)
+                printf("tract: debug: quiet param %u (%s) c=%u r=%.4f mean=%.4f peak=%.4f\n", k, ENG_TRACT.edit[k].label, c, r, mean, peak);
+            if (getenv("TRACT_DEBUG") && fabs(mean) > 0.005)
+                printf("tract: debug: dc %.4f param %u (%s) %s\n", mean, k, ENG_TRACT.edit[k].label, c ? "down" : "up");
+            worst_peak = peak > worst_peak ? peak : worst_peak;
+            worst_dc = fabs(mean) > worst_dc ? fabs(mean) : worst_dc;
+            quiet = r < quiet ? r : quiet;
         }
-    snprintf(what, sizeof what, "every parameter swept, both modes: peak %.3f of full scale (< 0.99)", worst_peak);
+    }
+    snprintf(what, sizeof what, "every parameter swept: peak %.3f of full scale (< 0.99)", worst_peak);
     check(what, worst_peak < 0.99);
     snprintf(what, sizeof what, "no DC: |mean| at most %.4f (< 0.01)", worst_dc);
     check(what, worst_dc < 0.01);
@@ -188,23 +198,27 @@ static void speaks(void)
 
 static void vowels(void)
 {
-    uint32_t mode;
+    static const struct { const char *name; int16_t body; } BODIES[2] = {
+        {"Male", 0}, {"Female", 64}
+    };
+    uint32_t b;
     char what[160];
-    for (mode = 0; mode < 2u; mode++) {
-        int16_t a[8] = {0, (int16_t)mode, 0, 0, 64, 5, 0, 127}, i[8] = {127, (int16_t)mode, 0, 0, 64, 5, 0, 127};
+    for (b = 0; b < 2u; b++) {
+        int16_t a[8] = {100, 110, 100, 0, BODIES[b].body, 0, 0, 0};
+        int16_t i[8] = {0,   0,   100, 0, BODIES[b].body, 0, 0, 0};
         double fa, fi;
         render(a, 45, Y, NFFT * 8, -1, 0);
         fa = env_peak(Y, NFFT * 8, 200, 1100);
         render(i, 45, Y, NFFT * 8, -1, 0);
         fi = env_peak(Y, NFFT * 8, 200, 1100);
-        snprintf(what, sizeof what, "%s: F1 of /a/ %.0f Hz above F1 of /i/ %.0f Hz", ENG_TRACT.edit[1].names[mode], fa, fi);
+        snprintf(what, sizeof what, "%s: F1 of /a/ %.0f Hz above F1 of /i/ %.0f Hz", BODIES[b].name, fa, fi);
         check(what, fa > fi + 150);
     }
 }
 
 static void stability(void)
 {
-    static const int16_t WORST[8] = {64, 1, 2, 127, 127, 127, 127, 0};
+    static const int16_t WORST[8] = {64, 64, 100, 64, 0, 0, 0, 2}; /* CHOIR 3, velum open */
     double mean, peak, r1, r3;
     char what[160];
     render(WORST, 57, Y, NS, -1, 0);
@@ -239,14 +253,13 @@ static double mix_cost(const int16_t *e, uint32_t notes)
     for (i = 0; i < nb; i++)
         mix_block(o, CTL);
     if (getenv("TRACT_DEBUG"))
-        printf("tract: debug: busy %u engine %u mode %d choir %d\n", busy_now(), trk[0].engine, trk[0].p[P_E1],
-               trk[0].p[P_E2]);
+        printf("tract: debug: busy %u engine %u choir %d\n", busy_now(), trk[0].engine, trk[0].p[P_E7]);
     return (double)(instr_now() - i0) / (nb * CTL);
 }
 
 static void cost(void)
 {
-    static const char *const NAME[4] = {"1X 22, CHOIR 1", "1X 22, CHOIR 3", "2X 44, CHOIR 1", "2X 44, CHOIR 3"};
+    static const char *const NAME[2] = {"1X 22, CHOIR 1", "1X 22, CHOIR 3"};
     double idle, c, worst = 0;
     uint32_t v;
     char what[160];
@@ -255,12 +268,12 @@ static void cost(void)
         return;
     }
     {
-        int16_t e[8] = {64, 0, 0, 0, 64, 10, 0, 100};
+        int16_t e[8] = {64, 64, 100, 0, 0, 0, 0, 0};
         idle = mix_cost(e, 0);
     }
     printf("tract: cost, host instructions per sample (one note; device estimate 1.7 %% per 100):\n");
-    for (v = 0; v < 4u; v++) {
-        int16_t e[8] = {64, (int16_t)(v >> 1), (int16_t)((v & 1u) * 2u), 127, 64, 60, 90, 20};
+    for (v = 0; v < 2u; v++) {
+        int16_t e[8] = {64, 64, 100, 0, 0, 0, 0, (int16_t)(v * 2u)};
         c = mix_cost(e, 1) - idle;
         printf("tract:   %-16s %6.0f  ~%.1f %%\n", NAME[v], c, c * 0.017);
         worst = c > worst ? c : worst;
@@ -290,15 +303,17 @@ static void demo(const char *dir, const char *name, const int16_t *e, uint32_t n
 
 static void demos(const char *dir)
 {
-    static const int16_t SW1[8] = {0, 0, 0, 0, 64, 10, 0, 110}, SW2[8] = {0, 1, 0, 0, 64, 10, 0, 110};
-    static const int16_t HUM[8] = {40, 1, 0, 0, 64, 10, 0, 127}, CH[8] = {20, 1, 2, 0, 50, 25, 10, 110};
-    static const int16_t SH[8] = {127, 1, 0, 0, 64, 10, 0, 127};
-    demo(dir, "vowel_sweep_1x", SW1, 45, 0, 127);
-    demo(dir, "vowel_sweep_2x", SW2, 45, 0, 127);
-    demo(dir, "lips_close_hum", HUM, 45, 7, 0);
-    demo(dir, "velum_open", HUM, 45, 6, 127);
-    demo(dir, "choir3", CH, 48, 0, 100);
-    demo(dir, "noise_constriction", SH, 52, 3, 127);
+    static const int16_t SW_AH[8] = {100, 110, 100, 0, 0, 0, 0, 0};
+    static const int16_t EE[8]    = {10,  10,  100, 0, 0, 0, 0, 0};
+    static const int16_t HUM[8]   = {64,  64,  100, 64, 0, 0, 0, 0};
+    static const int16_t CH[8]    = {80,  80,  100, 0, 0, 0, 0, 2};
+    static const int16_t LA[8]    = {100, 100, 100, 0, 0, 7, 0, 0};
+    demo(dir, "vowel_ah", SW_AH, 45, -1, 0);
+    demo(dir, "vowel_ee", EE, 45, -1, 0);
+    demo(dir, "vowel_sweep_ah_ee", SW_AH, 45, 0, 10);
+    demo(dir, "lips_close_hum", HUM, 45, 2, 0);
+    demo(dir, "choir3", CH, 48, -1, 0);
+    demo(dir, "syllable_la_la", LA, 45, -1, 0);
     printf("tract: demos in %s\n", dir);
 }
 

@@ -429,21 +429,8 @@ static uint32_t layer_btn(void);
  * track's (its patch's operators, ui_fm6op.c) */
 static int page_visible(uint32_t i)
 {
-    if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
-        return TSEL->eng_req % NENGINES == ENGI_DRUM;
-    if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
-        return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
-    if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)
-        return TSEL->eng_req % NENGINES == ENGI_FM6;
-#if FELUCCA_SLICE
-    if (PAGES[i].graph == GR_SLICES)
-        return ENGINES[TSEL->eng_req % NENGINES] == &ENG_SLICE;
-#else
-    if (PAGES[i].graph == GR_SLICES)
-        return 0;
-#endif
-    return !(PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] >= P_FM1_ATK &&
-             PAGES[i].id[0] <= P_FM4_LEVEL) || (FELUCCA_FM4 && TSEL->eng_req % NENGINES == ENGI_DIGITAL);
+    (void)i;
+    return 1;
 }
 
 static uint32_t page_first(uint32_t fam)
@@ -804,15 +791,7 @@ static void go_home(void)
  * (ui_input) */
 static void home_tap(void)
 {
-    uint32_t i = ui.page + 1u;
-    if (ui.home) {
-        ui.fam_last[FAM_TRK] = 0;                     /* (open_family: the family's first, the MIXER) */
-        open_family(FAM_TRK);
-    } else if (cur_page()->fam == FAM_TRK && i < NPAGES && PAGES[i].fam == FAM_TRK) {
-        open_family(FAM_TRK);                         /* (on HOME's page again: the next one) */
-    } else {
-        go_home();
-    }
+    go_home();
 }
 
 /* MENU > CONTROL > SELECT PAGE (1.5.5, Discussion #188): the SELECT knob steps the pages of the family shown, a detent
@@ -1383,6 +1362,9 @@ static void apply_preset_to(track_t *t, uint32_t pi)
         for (i = 0; i < 4u; i++)
             t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     }
+#if NOICE_PROBE
+    tract_preset_apply(t, pi);
+#endif
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
     load_end(t);
 }

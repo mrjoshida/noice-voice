@@ -39,8 +39,15 @@
                                                          * numbers */
 #define ENGI_ADPCM 14u
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
+#ifndef NOICE_PROBE
+#define NOICE_PROBE 1            /* NOICE VOICE: acoustic waveguide vocal synthesis */
+#endif
+#if NOICE_PROBE
+#define NENG_SHOWN 4u            /* The 4 vocal creature engines: HUMAN, TROLL, ELF, BEAST */
+#else
 #define NENG_SHOWN (NENGINES - !FELUCCA_FM4)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
+#endif
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
 
 /* ------------------------------------------------------- parameters --- */
@@ -82,6 +89,22 @@ enum {                          /* per-track parameters */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
+
+/* NOICE VOICE Articulatory Envelope & Acoustic Resonance Parameters */
+#define P_ENV_SPEED  P_ED_FLT     /* Glide / transition speed from Start to End shape */
+#define P_ENV_HOLD   P_ED_PIT     /* Hold / dwell time at End shape */
+#define P_ENV_RET    P_ED_SHP     /* Return time from End shape back to Start shape */
+#define P_ENV_MODE   P_ED_FX      /* Morph mode: 0 GLIDE, 1 RETURN, 2 BOUNCE, 3 TOUCH */
+
+#define P_END_TONGUE P_FM1_ATK    /* Target mouth shape: Tongue (0 front .. 127 back) */
+#define P_END_JAW    P_FM1_DEC    /* Target mouth shape: Jaw (0 closed .. 127 open) */
+#define P_END_LIPS   P_FM1_SUS    /* Target mouth shape: Lips (0 closed .. 127 spread) */
+#define P_END_VELUM  P_FM1_REL    /* Target mouth shape: Velum (0 shut .. 127 open nasal) */
+
+#define P_WALL_Q     P_FM2_ATK    /* Acoustic Cavity: Wall damping / Q */
+#define P_TRACT_LEN  P_FM2_DEC    /* Acoustic Cavity: Physical Tract Length / Formant scale */
+#define P_TRACHEA    P_FM2_SUS    /* Acoustic Cavity: Trachea / Subglottal chest warmth */
+#define P_NASAL_Q    P_FM2_REL    /* Acoustic Cavity: Nasal branch resonance */
 
 enum {                          /* global parameters */
     G_BPM, G_SWING, G_CLOCK, G_TUNE,

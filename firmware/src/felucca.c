@@ -35,6 +35,12 @@
 #ifndef FELUCCA_ID
 #define FELUCCA_ID "FM-1_707"    /* package identity (build.py: the .fwsc marker string): NOICE VOICE */
 #endif
+#ifndef FELUCCA_USB_MANUFACTURER
+#define FELUCCA_USB_MANUFACTURER "NOICE"
+#endif
+#ifndef FELUCCA_USB_PRODUCT
+#define FELUCCA_USB_PRODUCT "NOICE VOICE"
+#endif
 #ifndef FELUCCA_CPU2
 #define FELUCCA_CPU2 1           /* 1 (1.6.1): the second core is built in and renders some parts when MENU > SYSTEM >
                                   * 2ND CORE is ON (BETA; OFF by default: one core, as 1.6; bsp/chip/fm1_cpu1.h, fx.c
@@ -108,6 +114,8 @@ static __attribute__((noinline)) int c1_wait(void) { return fm1_cpu1_wait(); }  
 #include "menu_items.c"          /* MENU's rows and settings (ui_menu.c, editor_menu.c) */
 #include "icons.c"               /* parameter icons (FELUCCA_ICONS), used by ui_draw.c */
 #include "ui_graph.c"
+#include "nv_vec.c"
+#include "nv_view.c"
 #include "ui_draw.c"
 #include "ui_menu.c"
 #include "ui_input.c"

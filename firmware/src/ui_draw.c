@@ -1672,6 +1672,60 @@ static void ui_draw_page(uint32_t counting)
         page_entered();
     }
     cursor_fix();
+    if (ui.home) {
+        track_t *t = &trk[song.sel];
+        tract_t *tr = tr_of(t);
+        int32_t pres[TR_NMAX];
+        uint32_t i;
+        const char *m = (ui.msg_t && ui.msg[0]) ? ui.msg : 0;
+        tract_sync_creature(tr, t->engine);
+
+        /* While idle, keep articulator visual synced to knobs */
+        if (tr->artic.state == SYLL_IDLE) {
+            tr->artic.tongue = (uint8_t)clamp(t->p[P_E0], 0, 127);
+            tr->artic.jaw = (uint8_t)clamp(t->p[P_E1], 0, 127);
+            tr->artic.lips = (uint8_t)clamp(t->p[P_E2], 0, 127);
+            tr->artic.velum = (uint8_t)clamp(t->p[P_E3], 0, 127);
+            tr->artic.body = (uint8_t)clamp(t->p[P_E4], 0, 127);
+            tr->artic.cur_tongue = tr->artic.tongue;
+            tr->artic.cur_jaw = tr->artic.jaw;
+            tr->artic.cur_velum = ((int32_t)tr->artic.velum * 3276) / 127;
+            tr->artic.cur_lips = 512 + (int32_t)tr->artic.lips * 120;
+            nv_artic_update(&tr->artic, 0);
+            tr_control(tr, t->p);
+        }
+        for (i = 0; i < tr->n && i < TR_NMAX; i++)
+            pres[i] = tr->R[i] + tr->L[i];
+
+        lcd_sync();
+        /* Strip 0: 0..89 (Skull, Palate, Tongue, Jaw, Lips, Velum, Rays, Vowel Inset, Banner) */
+        nv_view_render_strip(cv_px, 0, 90, &tr->artic, tr->A, pres, tr->n, t->p, m);
+        lcd_blit(0, 0, 240, 90, cv_px);
+
+        lcd_sync();
+        /* Strip 1: 90..179 (Lower throat, jaw, tongue, rays) */
+        nv_view_render_strip(cv_px, 90, 90, &tr->artic, tr->A, pres, tr->n, t->p, m);
+        lcd_blit(0, 90, 240, 90, cv_px);
+
+        lcd_sync();
+        /* Strip 2: 180..239 (Bottom 4 cards: TONGUE, JAW, LIPS, VELUM) */
+        nv_view_render_strip(cv_px, 180, 60, &tr->artic, tr->A, pres, tr->n, t->p, m);
+        lcd_blit(0, 180, 240, 60, cv_px);
+
+        if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
+            str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
+            ui.msg2[0] = 0;
+            ui.msg_t = 60;
+        }
+        if (ui.bpm_t)
+            ui.bpm_t--;
+        if (ui.hot_t)
+            ui.hot_t--;
+        if (ui.help_t)
+            ui.help_t--;
+        ui.force = 0;
+        return;
+    }
     if (ui.force)
         draw_frame();
     felucca_dbg.stage = 3;

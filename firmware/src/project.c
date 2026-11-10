@@ -1081,10 +1081,15 @@ static int project_restore_runtime(const project_t *input)
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
     midi_route = MIDI_ROUTE_AGAIN;                      /* (events_block: what the channels no longer hear let go) */
+    uint8_t conv[NTRK] = {0};
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];
         const proj_trk_t *s = &p->t[k];
         uint32_t e = s->engine;                         /* (< NENGINES: proj_engines_ok) */
+        if (!eng_ok(e)) {
+            e = TRK_DEF[k % NPART][0];
+            conv[k] = 1;
+        }
         t->eng_req = (uint8_t)e;
         t->user = 0;                                    /* (no user preset slot is saved) */
         for (i = 0; i < P_COUNT; i++) {                 /* every value back inside its range (param_fit) */
@@ -1111,7 +1116,7 @@ static int project_restore_runtime(const project_t *input)
     for (k = 0; k < NTRK; k++) {                        /* the power-on sounds: format 1 (tracks 2..4), old drums */
         track_t *t = &trk[k];
         int16_t keep[P_COUNT];
-        if (p->t[k].preset == PROJ_DEF_SOUND) {
+        if (conv[k] || p->t[k].preset == PROJ_DEF_SOUND) {
             apply_preset_to(t, TRK_DEF[k][1]);
             track_defaults_steps(t);
         } else if (p->t[k].preset == PROJ_DEF_KEEP) {   /* the steps, LEVEL PAN MUTE, LEN DIV SWING GATE kept */
