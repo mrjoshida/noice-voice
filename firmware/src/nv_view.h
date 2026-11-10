@@ -15,6 +15,7 @@ struct track;
 void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                           const nv_artic_t *a, const int32_t *areas,
                           const int32_t *pres, uint32_t n_sections,
-                          const int16_t *params, const char *msg);
+                          const int16_t *params, const char *msg,
+                          int is_target);
 
 #endif /* NV_VIEW_H */

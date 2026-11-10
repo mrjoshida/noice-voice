@@ -5,6 +5,7 @@
 #include <string.h>
 
 #define P_E0 0
+#define P_END_TONGUE 4
 
 /* String and int helpers before nv_view.c */
 static unsigned str_len(const char *s) {
@@ -86,11 +87,11 @@ int main(int argc, char **argv) {
     int16_t params[8] = {64, 64, 100, 0, 0, 0, 0, 0};
 
     /* Strip 0: 0..89 */
-    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, NULL);
+    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, NULL, 0);
     /* Strip 1: 90..179 */
-    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, params, NULL);
+    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, params, NULL, 0);
     /* Strip 2: 180..239 */
-    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, params, NULL);
+    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, params, NULL, 0);
 
     system("mkdir -p build/test_out");
     save_ppm("build/test_out/nv_view_neutral.ppm", screen, 240, 240);
@@ -101,9 +102,9 @@ int main(int argc, char **argv) {
     artic.jaw = 0;
     params[0] = 0;
     params[1] = 0;
-    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, "/i/");
-    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, params, "/i/");
-    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, params, "/i/");
+    nv_view_render_strip(screen, 0, 90, &artic, NULL, pres, 22, params, "/i/", 1);
+    nv_view_render_strip(screen + 90 * 240, 90, 90, &artic, NULL, pres, 22, params, "/i/", 1);
+    nv_view_render_strip(screen + 180 * 240, 180, 60, &artic, NULL, pres, 22, params, "/i/", 1);
     save_ppm("build/test_out/nv_view_vowel_i.ppm", screen, 240, 240);
     printf("nv_view_test: saved build/test_out/nv_view_vowel_i.ppm\n");
 

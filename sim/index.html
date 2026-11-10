@@ -741,22 +741,40 @@ function drawLCD() {
     }
   }
 
+  const isEndMouth = (state.pageFam === 'EDIT' && state.pageIndex === 1) || (state.pageFam === 'ENV' && state.pageIndex === 1);
+  const isStartMouth = (state.pageFam === 'HOME') || (state.pageFam === 'EDIT' && state.pageIndex === 0);
+
   // Smooth interpolation from Start to End Shape
   const ph = state.morph.phase;
-  state.morph.curTongue = state.p.tongue + (state.p.end_tongue - state.p.tongue) * ph;
-  state.morph.curJaw = state.p.jaw + (state.p.end_jaw - state.p.jaw) * ph;
-  state.morph.curLips = state.p.lips + (state.p.end_lips - state.p.lips) * ph;
-  state.morph.curVelum = state.p.velum + (state.p.end_velum - state.p.velum) * ph;
+  if (state.morph.active) {
+    state.morph.curTongue = state.p.tongue + (state.p.end_tongue - state.p.tongue) * ph;
+    state.morph.curJaw = state.p.jaw + (state.p.end_jaw - state.p.jaw) * ph;
+    state.morph.curLips = state.p.lips + (state.p.end_lips - state.p.lips) * ph;
+    state.morph.curVelum = state.p.velum + (state.p.end_velum - state.p.velum) * ph;
+  } else if (isEndMouth) {
+    // When editing envelope mouth shape while idle, visual tool displays Target Shape!
+    state.morph.curTongue = state.p.end_tongue;
+    state.morph.curJaw = state.p.end_jaw;
+    state.morph.curLips = state.p.end_lips;
+    state.morph.curVelum = state.p.end_velum;
+  } else {
+    // When editing main mouth shape while idle, visual tool displays Start Shape!
+    state.morph.curTongue = state.p.tongue;
+    state.morph.curJaw = state.p.jaw;
+    state.morph.curLips = state.p.lips;
+    state.morph.curVelum = state.p.velum;
+  }
 
   // Draw Top Banner (Creature Name & Syllable Morph)
   const cNames = ['HUMAN', 'TROLL', 'ELF', 'BEAST'];
-  ctx.fillStyle = '#38bdf8';
+  ctx.fillStyle = isEndMouth ? '#f472b6' : '#38bdf8';
   ctx.font = 'bold 9px monospace';
   ctx.fillText(cNames[state.creature], 8, 14);
 
-  ctx.fillStyle = '#f472b6';
-  ctx.font = 'bold 11px monospace';
-  ctx.fillText(state.wordBanner, 70, 15);
+  ctx.fillStyle = isEndMouth ? '#f472b6' : '#38bdf8';
+  ctx.font = 'bold 10px monospace';
+  const bannerText = isEndMouth ? (state.morph.active ? state.wordBanner : '[END SHAPE]') : state.wordBanner;
+  ctx.fillText(bannerText, 62, 15);
 
   // Morph Progress Bar
   ctx.fillStyle = '#1e293b';

@@ -1073,6 +1073,13 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (vp == &TSEL->p[P_ATSNS] && !*vp && v)             /* AFTERTOUCH on (1.8): the engine's routing, if none */
         at_turn_on(TSEL);
     *vp = (int16_t)v;
+    if (pg->id[0] == P_END_TONGUE || (pg->id[0] == P_E0 && !ui.home)) {
+        char mb[24];
+        str_cpy(mb, d->label, sizeof mb);
+        str_cpy(mb + str_len(mb), " ", sizeof mb - str_len(mb));
+        fmt_int(mb + str_len(mb), (int32_t)v);
+        ui_message(mb);
+    }
     if (pg->scope != SC_GLOBAL) {
         motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
         ml_knob(TSEL, (uint32_t)(vp - TSEL->p));        /* (MIDI LEARN: picked) */

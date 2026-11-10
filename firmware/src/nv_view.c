@@ -5,7 +5,8 @@
 void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                           const nv_artic_t *a, const int32_t *areas,
                           const int32_t *pres, uint32_t n_sections,
-                          const int16_t *params, const char *msg)
+                          const int16_t *params, const char *msg,
+                          int is_target)
 {
     int32_t w = 240, h = strip_h;
     uint32_t i;
@@ -201,6 +202,17 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             sbuf[len] = ']';
             sbuf[len + 1] = 0;
             nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_AMBER));
+        } else if (is_target) {
+            char sbuf[32];
+            unsigned len;
+            const char *st = (a && a->state != SYLL_IDLE) ? "MORPH" : "TARGET";
+            sbuf[0] = '[';
+            sbuf[1] = 0;
+            str_cpy(sbuf + 1, st, sizeof(sbuf) - 2);
+            len = str_len(sbuf);
+            sbuf[len] = ']';
+            sbuf[len + 1] = 0;
+            nv_vec_text(buf, w, h, 60, 12, strip_y, 90, sbuf, NV_SWAP16(NV_COL_PINK));
         } else if (a) {
             const char *st = "VOWEL";
             char sbuf[32];
@@ -243,11 +255,20 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
         static const struct {
             const char *name;
             uint16_t color;
-        } CARDS[4] = {
+        } CARDS_START[4] = {
             {"TONGUE", NV_COL_GREEN},
             {"JAW",    NV_COL_CORAL},
             {"LIPS",   NV_COL_PINK},
             {"VELUM",  NV_COL_WHITE},
+        };
+        static const struct {
+            const char *name;
+            uint16_t color;
+        } CARDS_TARGET[4] = {
+            {"END TNG", NV_COL_GREEN},
+            {"END JAW", NV_COL_CORAL},
+            {"END LIP", NV_COL_PINK},
+            {"END VEL", NV_COL_WHITE},
         };
 
         for (i = 0; i < 4u; i++) {
@@ -255,8 +276,9 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             int32_t cy = 182;
             int32_t cw = 55;
             int32_t ch = 54;
-            uint16_t col = NV_SWAP16(CARDS[i].color);
-            int32_t val = params ? params[P_E0 + i] : 64;
+            const char *cname = is_target ? CARDS_TARGET[i].name : CARDS_START[i].name;
+            uint16_t col = NV_SWAP16(is_target ? CARDS_TARGET[i].color : CARDS_START[i].color);
+            int32_t val = params ? (is_target ? params[P_END_TONGUE + i] : params[P_E0 + i]) : 64;
             if (a && a->state != SYLL_IDLE) {
                 if (i == 0) val = a->cur_tongue;
                 else if (i == 1) val = a->cur_jaw;
@@ -271,9 +293,9 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
             nv_vec_line(buf, w, h, cx, cy + ch - strip_y, cx, cy - strip_y, col);
 
             /* Title label centered */
-            int32_t tw = nv_vec_text_width(CARDS[i].name, 60);
+            int32_t tw = nv_vec_text_width(cname, 60);
             int32_t tx = cx + (cw - tw) / 2;
-            nv_vec_text(buf, w, h, tx, cy + 12, strip_y, 60, CARDS[i].name, col);
+            nv_vec_text(buf, w, h, tx, cy + 12, strip_y, 60, cname, col);
 
             /* Value number in center */
             char val_str[16];
