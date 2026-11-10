@@ -11,13 +11,26 @@
 #define NV_ORAL     14u
 
 static const char *const NV_ONSET_DISP[] = {
-    "OFF", "h", "m", "n", "b", "d", "g", "l", "w", "j",
-    "r", "s", "sh", "f", "v", "z", "k", "R-RET", "R-RHO", "t", "p", 0
+    "OFF",
+    "p", "b", "t", "d", "k", "g",
+    "m", "n", "ng", "ny",
+    "f", "v", "th", "dh", "s", "z", "sh", "zh", "h",
+    "ch", "j", "ts",
+    "w", "y", "l", "r", "R-RET", "R-RHO", "FLAP",
+    "T-RET", "D-RET", "S-RET", "x-VEL", "Q-UVU", "R-UVU", "H-PHA", "AYN", "GLOT",
+    "KICK", "SNARE", "HIHAT", "RIM", "CLICK", "POP",
+    0
 };
 
 static const char *const NV_CODA_DISP[] = {
-    "OFF", "m", "n", "ng", "l", "h", "s", "i", "u", "schwa",
-    "d", "R-RET", "R-RHO", "t", "p", 0
+    "OFF",
+    "m", "n", "ng", "ny",
+    "l", "r", "R-RET", "R-RHO", "FLAP",
+    "s", "z", "sh", "zh", "th", "dh", "f", "v",
+    "p", "t", "k", "b", "d", "g",
+    "ch", "j", "h", "GLOT",
+    "CLICK", "POP",
+    0
 };
 
 typedef enum {

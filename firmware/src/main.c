@@ -55,6 +55,9 @@ static void felucca_init(void)
     chain_defaults(&chain_config);
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
+#if NOICE_PROBE
+    song.g[G_BPM] = 110;                      /* speaking cadence for NOICE VOICE factory sentences */
+#endif
     undo_depth++;                             /* (no undo copy of the power-on loads) */
     fm6_init();                               /* every track's FM6 patch: the init voice */
     for (i = 0; i < NTRK; i++) {
@@ -68,86 +71,199 @@ static void felucca_init(void)
         if (TRK_DEF[i][2])
             load_pat16(t, PATTERNS[TRK_DEF[i][2] - 1u].note, PATTERNS[TRK_DEF[i][2] - 1u].flags);
         if (i == 0) {
-            /* Factory speech sentence: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW" */
-            /* Word 1: NOICE (Step 0) - Nasal /n/ into diphthong /oi/ */
-            motion_set_lock(t, 0, P_E0, 80);
-            motion_set_lock(t, 0, P_E1, 100);
-            motion_set_lock(t, 0, P_E2, 30);
-            motion_set_lock(t, 0, P_E3, 115);
-            motion_set_lock(t, 0, P_END_TONGUE, 25);
-            motion_set_lock(t, 0, P_END_JAW, 85);
-            motion_set_lock(t, 0, P_END_LIPS, 80);
-            motion_set_lock(t, 0, P_END_VELUM, 0);
+            /* Part 0 (HUMAN): "NOICE VOICE CAN SPEAK WORDS TO YOU NOW" */
+            /* Word 1: NOICE (Step 0) - /n/ -> /oi/ -> /s/ */
+            motion_set_event(t, 0, P_E5, 8);
+            motion_set_event(t, 0, P_E6, 10);
+            motion_set_event(t, 0, P_E0, 115);
+            motion_set_event(t, 0, P_E1, 95);
+            motion_set_event(t, 0, P_E2, 35);
+            motion_set_event(t, 0, P_END_TONGUE, 10);
+            motion_set_event(t, 0, P_END_JAW, 20);
+            motion_set_event(t, 0, P_END_LIPS, 95);
 
-            /* Word 2: VOICE (Step 2) - Labiodental /v/ into /oi/ */
-            motion_set_lock(t, 2, P_E0, 35);
-            motion_set_lock(t, 2, P_E1, 95);
-            motion_set_lock(t, 2, P_E2, 10);
-            motion_set_lock(t, 2, P_E3, 0);
-            motion_set_lock(t, 2, P_END_TONGUE, 25);
-            motion_set_lock(t, 2, P_END_JAW, 80);
-            motion_set_lock(t, 2, P_END_LIPS, 80);
-            motion_set_lock(t, 2, P_END_VELUM, 0);
+            /* Word 2: VOICE (Step 2) - /v/ -> /oi/ -> /s/ */
+            motion_set_event(t, 2, P_E5, 12);
 
-            /* Word 3: CAN (Step 4) - Velar /k/ into /ae/ + /n/ */
-            motion_set_lock(t, 4, P_E0, 110);
-            motion_set_lock(t, 4, P_E1, 80);
-            motion_set_lock(t, 4, P_E2, 55);
-            motion_set_lock(t, 4, P_E3, 0);
-            motion_set_lock(t, 4, P_END_TONGUE, 75);
-            motion_set_lock(t, 4, P_END_JAW, 35);
-            motion_set_lock(t, 4, P_END_LIPS, 70);
-            motion_set_lock(t, 4, P_END_VELUM, 100);
+            /* Word 3: CAN (Step 4) - /k/ -> /ae/ -> /n/ */
+            motion_set_event(t, 4, P_E5, 5);
+            motion_set_event(t, 4, P_E6, 2);
+            motion_set_event(t, 4, P_E0, 15);
+            motion_set_event(t, 4, P_E1, 120);
+            motion_set_event(t, 4, P_E2, 90);
+            motion_set_event(t, 4, P_END_TONGUE, 20);
+            motion_set_event(t, 4, P_END_JAW, 70);
 
-            /* Word 4: SPEAK (Step 6) - Sibilant /s/ into /i/ + /k/ */
-            motion_set_lock(t, 6, P_E0, 70);
-            motion_set_lock(t, 6, P_E1, 95);
-            motion_set_lock(t, 6, P_E2, 60);
-            motion_set_lock(t, 6, P_E3, 0);
-            motion_set_lock(t, 6, P_END_TONGUE, 20);
-            motion_set_lock(t, 6, P_END_JAW, 90);
-            motion_set_lock(t, 6, P_END_LIPS, 90);
-            motion_set_lock(t, 6, P_END_VELUM, 0);
+            /* Word 4: SPEAK (Step 6) - /s/ -> /i/ -> /k/ */
+            motion_set_event(t, 6, P_E5, 15);
+            motion_set_event(t, 6, P_E6, 20);
+            motion_set_event(t, 6, P_E0, 5);
+            motion_set_event(t, 6, P_E1, 15);
+            motion_set_event(t, 6, P_END_TONGUE, 5);
+            motion_set_event(t, 6, P_END_JAW, 15);
 
-            /* Word 5: WORDS (Step 8) - Labial /w/ into /er/ */
-            motion_set_lock(t, 8, P_E0, 35);
-            motion_set_lock(t, 8, P_E1, 75);
-            motion_set_lock(t, 8, P_E2, 15);
-            motion_set_lock(t, 8, P_E3, 0);
-            motion_set_lock(t, 8, P_END_TONGUE, 60);
-            motion_set_lock(t, 8, P_END_JAW, 55);
-            motion_set_lock(t, 8, P_END_LIPS, 45);
-            motion_set_lock(t, 8, P_END_VELUM, 0);
+            /* Word 5: WORDS (Step 8) - /w/ -> /er/ -> /z/ */
+            motion_set_event(t, 8, P_E5, 23);
+            motion_set_event(t, 8, P_E6, 11);
+            motion_set_event(t, 8, P_E0, 64);
+            motion_set_event(t, 8, P_E1, 64);
+            motion_set_event(t, 8, P_E2, 35);
+            motion_set_event(t, 8, P_END_TONGUE, 64);
+            motion_set_event(t, 8, P_END_JAW, 64);
+            motion_set_event(t, 8, P_END_LIPS, 50);
 
-            /* Word 6: TO (Step 10) - Lingual /t/ into /u/ */
-            motion_set_lock(t, 10, P_E0, 90);
-            motion_set_lock(t, 10, P_E1, 95);
-            motion_set_lock(t, 10, P_E2, 50);
-            motion_set_lock(t, 10, P_E3, 0);
-            motion_set_lock(t, 10, P_END_TONGUE, 35);
-            motion_set_lock(t, 10, P_END_JAW, 85);
-            motion_set_lock(t, 10, P_END_LIPS, 20);
-            motion_set_lock(t, 10, P_END_VELUM, 0);
+            /* Word 6: TO (Step 10) - /t/ -> /u/ */
+            motion_set_event(t, 10, P_E5, 3);
+            motion_set_event(t, 10, P_E6, 0);
+            motion_set_event(t, 10, P_E0, 120);
+            motion_set_event(t, 10, P_E1, 15);
+            motion_set_event(t, 10, P_E2, 25);
+            motion_set_event(t, 10, P_END_TONGUE, 120);
+            motion_set_event(t, 10, P_END_JAW, 15);
+            motion_set_event(t, 10, P_END_LIPS, 25);
 
-            /* Word 7: YOU (Step 12) - Palatal /j/ into /u/ */
-            motion_set_lock(t, 12, P_E0, 20);
-            motion_set_lock(t, 12, P_E1, 85);
-            motion_set_lock(t, 12, P_E2, 75);
-            motion_set_lock(t, 12, P_E3, 0);
-            motion_set_lock(t, 12, P_END_TONGUE, 35);
-            motion_set_lock(t, 12, P_END_JAW, 80);
-            motion_set_lock(t, 12, P_END_LIPS, 18);
-            motion_set_lock(t, 12, P_END_VELUM, 0);
+            /* Word 7: YOU (Step 12) - /y/ -> /u/ */
+            motion_set_event(t, 12, P_E5, 24);
 
-            /* Word 8: NOW (Step 14) - Nasal /n/ into /au/ */
-            motion_set_lock(t, 14, P_E0, 80);
-            motion_set_lock(t, 14, P_E1, 95);
-            motion_set_lock(t, 14, P_E2, 40);
-            motion_set_lock(t, 14, P_E3, 115);
-            motion_set_lock(t, 14, P_END_TONGUE, 45);
-            motion_set_lock(t, 14, P_END_JAW, 30);
-            motion_set_lock(t, 14, P_END_LIPS, 25);
-            motion_set_lock(t, 14, P_END_VELUM, 0);
+            /* Word 8: NOW (Step 14) - /n/ -> /au/ */
+            motion_set_event(t, 14, P_E5, 8);
+            motion_set_event(t, 14, P_E0, 64);
+            motion_set_event(t, 14, P_E1, 120);
+            motion_set_event(t, 14, P_E2, 90);
+            motion_set_event(t, 14, P_END_TONGUE, 120);
+            motion_set_event(t, 14, P_END_JAW, 20);
+            motion_set_event(t, 14, P_END_LIPS, 20);
+        } else if (i == 1) {
+            /* Part 1 (TROLL): "DEEP CAVE OGRES ROAR AND CRUSH ROCK" */
+            /* Word 1: DEEP (Step 0) - /d/ -> /i/ -> /p/ */
+            motion_set_event(t, 0, P_E5, 4);
+            motion_set_event(t, 0, P_E6, 18);
+            motion_set_event(t, 0, P_E0, 5);
+            motion_set_event(t, 0, P_E1, 15);
+
+            /* Word 2: CAVE (Step 2) - /k/ -> /e/ -> /v/ */
+            motion_set_event(t, 2, P_E5, 5);
+            motion_set_event(t, 2, P_E6, 17);
+            motion_set_event(t, 2, P_E0, 15);
+            motion_set_event(t, 2, P_E1, 70);
+
+            /* Word 3: O- (Step 4) - pharyngeal roar /ʕ/ */
+            motion_set_event(t, 4, P_E5, 37);
+            motion_set_event(t, 4, P_E6, 0);
+            motion_set_event(t, 4, P_E0, 115);
+
+            /* Word 4: -GRES (Step 6) - /g/ -> /z/ */
+            motion_set_event(t, 6, P_E5, 6);
+            motion_set_event(t, 6, P_E6, 11);
+            motion_set_event(t, 6, P_E0, 64);
+            motion_set_event(t, 6, P_E1, 90);
+
+            /* Word 5: ROAR (Step 8) - uvular roar /ʁ/ -> retroflex /R-RET/ */
+            motion_set_event(t, 8, P_E5, 35);
+            motion_set_event(t, 8, P_E6, 7);
+            motion_set_event(t, 8, P_E0, 120);
+            motion_set_event(t, 8, P_E1, 95);
+
+            /* Word 6: AND (Step 10) - glottal /ʔ/ -> /n/ */
+            motion_set_event(t, 10, P_E5, 38);
+            motion_set_event(t, 10, P_E6, 2);
+            motion_set_event(t, 10, P_E0, 15);
+            motion_set_event(t, 10, P_E1, 115);
+
+            /* Word 7: CRUSH (Step 12) - /k/ -> /ʃ/ */
+            motion_set_event(t, 12, P_E5, 5);
+            motion_set_event(t, 12, P_E6, 12);
+            motion_set_event(t, 12, P_E0, 64);
+            motion_set_event(t, 12, P_E1, 70);
+
+            /* Word 8: ROCK (Step 14) - retroflex /R-RET/ -> /k/ */
+            motion_set_event(t, 14, P_E5, 27);
+            motion_set_event(t, 14, P_E6, 20);
+            motion_set_event(t, 14, P_E0, 80);
+            motion_set_event(t, 14, P_E1, 120);
+        } else if (i == 2) {
+            /* Part 2 (ELF): "BREATHE IN, BREATHE OUT, I AM MADE OF AIR" */
+            /* Pure vowel base so odd-step vowel notes unlock clean */
+            t->p[P_E5] = 0;
+            t->p[P_E6] = 0;
+
+            /* Word 1: BREATHE (Step 0) - /b/ -> /i/ -> /dh/ */
+            motion_set_lock(t, 0, P_E5, 2);
+            motion_set_lock(t, 0, P_E6, 15);
+            motion_set_event(t, 0, P_E0, 10);
+            motion_set_event(t, 0, P_E1, 20);
+
+            /* Word 2: IN (Step 2) - /h/ -> /i/ -> /n/ */
+            motion_set_lock(t, 2, P_E5, 19);
+            motion_set_lock(t, 2, P_E6, 2);
+            motion_set_event(t, 2, P_E0, 15);
+            motion_set_event(t, 2, P_E1, 30);
+
+            /* Word 3: BREATHE (Step 4) - /b/ -> /i/ -> /dh/ */
+            motion_set_lock(t, 4, P_E5, 2);
+            motion_set_lock(t, 4, P_E6, 15);
+            motion_set_event(t, 4, P_E0, 10);
+            motion_set_event(t, 4, P_E1, 20);
+
+            /* Word 4: OUT (Step 6) - /au/ -> /t/ coda */
+            motion_set_lock(t, 6, P_E6, 19);
+            motion_set_event(t, 6, P_E0, 64);
+            motion_set_event(t, 6, P_E1, 110);
+            motion_set_event(t, 6, P_END_TONGUE, 110);
+            motion_set_event(t, 6, P_END_JAW, 25);
+
+            /* Word 5: I (Step 8) - diphthong /ai/ */
+            motion_set_event(t, 8, P_END_TONGUE, 10);
+            motion_set_event(t, 8, P_END_JAW, 20);
+
+            /* Word 6: AM (Step 10) - /m/ coda */
+            motion_set_lock(t, 10, P_E6, 1);
+            motion_set_event(t, 10, P_E0, 15);
+            motion_set_event(t, 10, P_E1, 115);
+
+            /* Word 7: MADE (Step 12) - /m/ -> /e/ -> /d/ */
+            motion_set_lock(t, 12, P_E5, 7);
+            motion_set_lock(t, 12, P_E6, 22);
+            motion_set_event(t, 12, P_E1, 65);
+
+            /* Word 8: AIR (Step 14) - /R-RHO/ -> /r/ */
+            motion_set_lock(t, 14, P_E5, 28);
+            motion_set_lock(t, 14, P_E6, 6);
+            motion_set_event(t, 14, P_E0, 20);
+            motion_set_event(t, 14, P_E1, 60);
+        } else if (i == 3) {
+            /* Part 3 (BEAST): "BOOTS AND CATS" Vocal Beatbox */
+            /* Step 0: BOOTS (Acoustic Ejective Kick Burst) */
+            motion_set_event(t, 0, P_E5, 39);
+            motion_set_event(t, 0, P_E6, 10);
+
+            /* Step 2: AND (Hi-hat closure) */
+            motion_set_event(t, 2, P_E5, 41);
+            motion_set_event(t, 2, P_E6, 0);
+
+            /* Step 4: CATS (Snare burst) */
+            motion_set_event(t, 4, P_E5, 40);
+            motion_set_event(t, 4, P_E6, 10);
+
+            /* Step 6: AND (Hi-hat closure) */
+            motion_set_event(t, 6, P_E5, 41);
+            motion_set_event(t, 6, P_E6, 0);
+
+            /* Step 8: BOOTS (Lip Pop kick) */
+            motion_set_event(t, 8, P_E5, 44);
+            motion_set_event(t, 8, P_E6, 10);
+
+            /* Step 10: AND (Cavitation tongue click) */
+            motion_set_event(t, 10, P_E5, 43);
+            motion_set_event(t, 10, P_E6, 0);
+
+            /* Step 12: CATS (Rimshot impulse) */
+            motion_set_event(t, 12, P_E5, 42);
+            motion_set_event(t, 12, P_E6, 10);
+
+            /* Step 14: AND (Hi-hat closure) */
+            motion_set_event(t, 14, P_E5, 41);
+            motion_set_event(t, 14, P_E6, 0);
         }
         pat_sig[i] = steps_sig(t);            /* a default pattern, not the user's */
         pat_last[i] = TRK_DEF[i][2];

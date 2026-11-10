@@ -38,10 +38,10 @@ int main(int argc, char **argv)
     check("eng_ok(12) is false (legacy FM6 masked)", !eng_ok(12));
 
     /* 3. Verify presets */
-    check("HUMAN has 8 presets", ENG_HUMAN.npresets == 8u);
-    check("TROLL has 8 presets", ENG_TROLL.npresets == 8u);
-    check("ELF has 8 presets", ENG_ELF.npresets == 8u);
-    check("BEAST has 8 presets", ENG_BEAST.npresets == 8u);
+    check("HUMAN has 12 presets", ENG_HUMAN.npresets == 12u);
+    check("TROLL has 12 presets", ENG_TROLL.npresets == 12u);
+    check("ELF has 12 presets", ENG_ELF.npresets == 12u);
+    check("BEAST has 12 presets", ENG_BEAST.npresets == 12u);
 
     /* 4. Audio rendering test on each creature */
     for (uint32_t c = 5; c <= 8; c++) {
@@ -125,10 +125,23 @@ int main(int argc, char **argv)
     trk_note_off(&trk[0], 60);
 
     /* Test Retroflex onset consonant */
-    trk[0].p[P_E5] = 17; /* Retroflex [ɻ] onset */
+    trk[0].p[P_E5] = 27; /* Retroflex [ɻ] onset (R-RET) */
     trk_note_on(&trk[0], 60, 100);
     track_render(&trk[0], buf, 32);
     check("Retroflex [ɻ] onset active", tr->artic.state == SYLL_ONSET);
+    trk_note_off(&trk[0], 60);
+
+    /* Test Beatbox Kick & Click */
+    trk[0].p[P_E5] = 39; /* KICK */
+    trk_note_on(&trk[0], 60, 100);
+    track_render(&trk[0], buf, 32);
+    check("Beatbox KICK onset active", tr->artic.state == SYLL_ONSET);
+    trk_note_off(&trk[0], 60);
+
+    trk[0].p[P_E5] = 43; /* CLICK */
+    trk_note_on(&trk[0], 60, 100);
+    track_render(&trk[0], buf, 32);
+    check("Beatbox CLICK onset active", tr->artic.state == SYLL_ONSET);
     trk_note_off(&trk[0], 60);
 
     if (bad) {

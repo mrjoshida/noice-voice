@@ -196,6 +196,42 @@
     color: var(--screen-accent);
     box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
   }
+  .phrases-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: #171a22;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.06);
+    flex-wrap: wrap;
+  }
+  .phrases-title {
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #64748b;
+    margin-right: 4px;
+  }
+  .phrase-btn {
+    padding: 4px 10px;
+    background: #232833;
+    border: 1px solid #373e4f;
+    border-radius: 5px;
+    color: #94a3b8;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .phrase-btn:hover { background: #2f3645; color: #fff; }
+  .phrase-btn.active {
+    background: #0284c7;
+    color: #fff;
+    border-color: #38bdf8;
+    box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
+  }
   .transport-panel {
     display: flex;
     flex-direction: column;
@@ -430,6 +466,18 @@
     </div>
   </div>
 
+  <!-- PHRASE BAR -->
+  <div class="phrases-bar">
+    <span class="phrases-title">SAVED PHRASES:</span>
+    <button class="phrase-btn active" data-phrase="NOICE">NOICE (HUMAN)</button>
+    <button class="phrase-btn" data-phrase="OGRE">OGRE (TROLL)</button>
+    <button class="phrase-btn" data-phrase="MADE AIR">MADE AIR (ELF)</button>
+    <button class="phrase-btn" data-phrase="BOOTS">BOOTS &amp; CATS (BEAST)</button>
+    <button class="phrase-btn" data-phrase="CLICKS">CLICKS &amp; POPS</button>
+    <button class="phrase-btn" data-phrase="RETRO">RETRO RIVERS</button>
+    <button class="phrase-btn" data-phrase="ELF SONG">ELF SONG</button>
+  </div>
+
   <!-- 16 PIANO KEYS / STEPS -->
   <div class="keys-deck">
     <div class="keyboard">
@@ -444,7 +492,7 @@
 
   <div class="footer-status">
     <div>SPEECH SENTENCE: <span class="sentence-badge" id="sentence-word">"NOICE VOICE CAN SPEAK WORDS TO YOU NOW"</span></div>
-    <div>ACTIVE STEP: <span id="active-step-num">1</span>/16 | TEMPO: 110 BPM | CPU: ~14%</div>
+    <div>ACTIVE STEP: <span id="active-step-num">1</span>/16 | TEMPO: <span id="tempo-bpm">110</span> BPM | CPU: ~14%</div>
   </div>
 </div>
 
@@ -453,8 +501,39 @@
 const canvas = document.getElementById('lcd');
 const ctx = canvas.getContext('2d');
 
-const ONSET_NAMES = ["OFF", "h", "m", "r", "R-RET", "R-RHO", "s", "sh", "t", "p"];
-const CODA_NAMES  = ["OFF", "m", "n", "ng", "r", "R-RET", "s", "sh", "t", "p"];
+const ONSET_NAMES = [
+  "OFF",
+  "p", "b", "t", "d", "k", "g",
+  "m", "n", "ng", "ny",
+  "f", "v", "th", "dh", "s", "z", "sh", "zh", "h",
+  "ch", "j", "ts",
+  "w", "y", "l", "r", "R-RET", "R-RHO", "FLAP",
+  "T-RET", "D-RET", "S-RET", "x-VEL", "Q-UVU", "R-UVU", "H-PHA", "AYN", "GLOT",
+  "KICK", "SNARE", "HIHAT", "RIM", "CLICK", "POP"
+];
+
+const CODA_NAMES = [
+  "OFF",
+  "m", "n", "ng", "ny",
+  "l", "r", "R-RET", "R-RHO", "FLAP",
+  "s", "z", "sh", "zh", "th", "dh", "f", "v",
+  "p", "t", "k", "b", "d", "g",
+  "ch", "j", "h", "GLOT",
+  "CLICK", "POP"
+];
+
+// Constriction section (0..21), manner (0:stop,1:nasal,2:fric,3:approx,4:glot), voiced (0|1) matching NV_ONSETS
+const ONSET_META = [
+  { c: 10, m: 3, v: 1 }, // 0 OFF
+  { c: 21, m: 0, v: 0 }, { c: 21, m: 0, v: 1 }, { c: 15, m: 0, v: 0 }, { c: 16, m: 0, v: 1 }, { c: 8, m: 0, v: 0 }, { c: 8, m: 0, v: 1 }, // p..g
+  { c: 21, m: 1, v: 1 }, { c: 16, m: 1, v: 1 }, { c: 7, m: 1, v: 1 },  { c: 14, m: 1, v: 1 }, // m..ny
+  { c: 19, m: 2, v: 0 }, { c: 19, m: 2, v: 1 }, { c: 18, m: 2, v: 0 }, { c: 18, m: 2, v: 1 }, { c: 17, m: 2, v: 0 }, { c: 17, m: 2, v: 1 }, { c: 16, m: 2, v: 0 }, { c: 16, m: 2, v: 1 }, { c: 0, m: 4, v: 0 }, // f..h
+  { c: 16, m: 2, v: 0 }, { c: 16, m: 2, v: 1 }, { c: 17, m: 2, v: 0 }, // ch, j, ts
+  { c: 10, m: 3, v: 1 }, { c: 14, m: 3, v: 1 }, { c: 16, m: 3, v: 1 }, { c: 16, m: 3, v: 1 }, { c: 15, m: 3, v: 1 }, { c: 15, m: 3, v: 1 }, { c: 16, m: 0, v: 1 }, // w..FLAP
+  { c: 15, m: 0, v: 0 }, { c: 15, m: 0, v: 1 }, { c: 15, m: 2, v: 0 }, { c: 8, m: 2, v: 0 },  { c: 5, m: 0, v: 0 },  { c: 5, m: 2, v: 1 },  { c: 2, m: 2, v: 0 },  { c: 2, m: 2, v: 1 },  { c: 0, m: 4, v: 0 }, // T-RET..GLOT
+  { c: 21, m: 0, v: 0 }, { c: 19, m: 2, v: 0 }, { c: 17, m: 2, v: 0 }, { c: 8, m: 0, v: 0 },  { c: 16, m: 0, v: 0 }, { c: 21, m: 0, v: 0 } // KICK..POP
+];
+
 const MODE_NAMES  = ["GLIDE", "RETURN", "BOUNCE", "TOUCH"];
 const MODE_SHORT  = ["GLID", "RET", "BNC", "TCH"];
 
@@ -468,6 +547,7 @@ const state = {
   seqStep: 0,
   bpm: 110,
   touchPressure: 64,
+  activePhrase: 'NOICE',
   // Live Articulator Values (0..127)
   p: {
     // MOUTH (Start)
@@ -497,7 +577,8 @@ const state = {
     curJaw: 64,
     curLips: 64,
     curVelum: 0,
-    mouthAcousticPulse: 0
+    mouthAcousticPulse: 0,
+    elapsedSamples: 0
   },
   // Note state
   noteActive: false,
@@ -505,25 +586,158 @@ const state = {
   wordBanner: 'NOICE'
 };
 
-// Sentence Sequence: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW"
-const SENTENCE = [
-  { word: "NOI-", note: 57, onset: 2, coda: 0, tng: 80, jaw: 100, lip: 30, vel: 115, e_tng: 25, e_jaw: 85, e_lip: 80, e_vel: 0 },
-  { word: "-CE",  note: 57, tie: true },
-  { word: "VOI-", note: 59, onset: 0, coda: 0, tng: 35, jaw: 95,  lip: 10, vel: 0,   e_tng: 25, e_jaw: 80, e_lip: 80, e_vel: 0 },
-  { word: "-CE",  note: 59, tie: true },
-  { word: "CAN",  note: 60, onset: 0, coda: 2, tng: 110, jaw: 80, lip: 55, vel: 0,   e_tng: 75, e_jaw: 35, e_lip: 70, e_vel: 100 },
-  { word: "CAN",  note: 60, tie: true },
-  { word: "SPEAK",note: 62, onset: 6, coda: 8, tng: 70, jaw: 95,  lip: 60, vel: 0,   e_tng: 20, e_jaw: 90, e_lip: 90, e_vel: 0 },
-  { word: "SPEAK",note: 62, tie: true },
-  { word: "WORDS",note: 60, onset: 4, coda: 6, tng: 35, jaw: 75,  lip: 15, vel: 0,   e_tng: 60, e_jaw: 55, e_lip: 45, e_vel: 0 },
-  { word: "WORDS",note: 60, tie: true },
-  { word: "TO",   note: 59, onset: 8, coda: 0, tng: 90, jaw: 95,  lip: 50, vel: 0,   e_tng: 35, e_jaw: 85, e_lip: 20, e_vel: 0 },
-  { word: "TO",   note: 59, tie: true },
-  { word: "YOU",  note: 57, onset: 0, coda: 0, tng: 20, jaw: 85,  lip: 75, vel: 0,   e_tng: 35, e_jaw: 80, e_lip: 18, e_vel: 0 },
-  { word: "YOU",  note: 57, tie: true },
-  { word: "NOW",  note: 55, onset: 2, coda: 0, tng: 80, jaw: 95,  lip: 40, vel: 115, e_tng: 45, e_jaw: 30, e_lip: 25, e_vel: 0 },
-  { word: "NOW",  note: 55, tie: true }
-];
+// Factory Phrases Catalog (matches firmware PATTERNS[] & main.c locks)
+const PHRASES = {
+  "NOICE": {
+    creature: 0, bpm: 110, label: '"NOICE VOICE CAN SPEAK WORDS TO YOU NOW"',
+    steps: [
+      { word: "NOI-", note: 57, onset: 8,  coda: 10, tng: 115, jaw: 95,  lip: 35, vel: 90,  e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "-CE",  note: 57, tie: true },
+      { word: "VOI-", note: 59, onset: 12, coda: 10, tng: 115, jaw: 95,  lip: 25, vel: 0,   e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "-CE",  note: 59, tie: true },
+      { word: "CAN",  note: 60, onset: 5,  coda: 2,  tng: 15,  jaw: 120, lip: 90, vel: 0,   e_tng: 20,  e_jaw: 70, e_lip: 80, e_vel: 100 },
+      { word: "CAN",  note: 60, tie: true },
+      { word: "SPEAK",note: 62, onset: 15, coda: 20, tng: 5,   jaw: 15,  lip: 90, vel: 0,   e_tng: 5,   e_jaw: 15, e_lip: 90, e_vel: 0 },
+      { word: "SPEAK",note: 62, tie: true },
+      { word: "WORDS",note: 60, onset: 23, coda: 11, tng: 64,  jaw: 64,  lip: 35, vel: 0,   e_tng: 64,  e_jaw: 64, e_lip: 50, e_vel: 0 },
+      { word: "WORDS",note: 60, tie: true },
+      { word: "TO",   note: 59, onset: 3,  coda: 0,  tng: 120, jaw: 15,  lip: 25, vel: 0,   e_tng: 120, e_jaw: 15, e_lip: 25, e_vel: 0 },
+      { word: "TO",   note: 59, tie: true },
+      { word: "YOU",  note: 57, onset: 24, coda: 0,  tng: 120, jaw: 15,  lip: 25, vel: 0,   e_tng: 120, e_jaw: 15, e_lip: 25, e_vel: 0 },
+      { word: "YOU",  note: 57, tie: true },
+      { word: "NOW",  note: 55, onset: 8,  coda: 0,  tng: 64,  jaw: 120, lip: 90, vel: 90,  e_tng: 120, e_jaw: 20, e_lip: 20, e_vel: 0 },
+      { word: "NOW",  note: 55, tie: true }
+    ]
+  },
+  "OGRE": {
+    creature: 1, bpm: 98, label: '"DEEP CAVE OGRES ROAR AND CRUSH ROCK"',
+    steps: [
+      { word: "DEEP",  note: 36, onset: 4,  coda: 18, tng: 5,   jaw: 15,  lip: 90, vel: 0,  e_tng: 10,  e_jaw: 20,  e_lip: 15, e_vel: 0 },
+      { word: "DEEP",  note: 36, tie: true },
+      { word: "CAVE",  note: 38, onset: 5,  coda: 17, tng: 15,  jaw: 70,  lip: 85, vel: 0,  e_tng: 10,  e_jaw: 20,  e_lip: 40, e_vel: 0 },
+      { word: "CAVE",  note: 38, tie: true },
+      { word: "O-",    note: 39, onset: 37, coda: 0,  tng: 115, jaw: 70,  lip: 40, vel: 0,  e_tng: 120, e_jaw: 80,  e_lip: 35, e_vel: 0 },
+      { word: "-GRES", note: 39, tie: true },
+      { word: "OGRES", note: 41, onset: 6,  coda: 11, tng: 64,  jaw: 90,  lip: 60, vel: 0,  e_tng: 50,  e_jaw: 70,  e_lip: 50, e_vel: 0 },
+      { word: "OGRES", note: 41, tie: true },
+      { word: "ROAR",  note: 41, onset: 35, coda: 7,  tng: 120, jaw: 95,  lip: 60, vel: 0,  e_tng: 90,  e_jaw: 90,  e_lip: 50, e_vel: 0 },
+      { word: "ROAR",  note: 41, tie: true },
+      { word: "AND",   note: 39, onset: 38, coda: 2,  tng: 15,  jaw: 115, lip: 80, vel: 0,  e_tng: 50,  e_jaw: 50,  e_lip: 70, e_vel: 80 },
+      { word: "AND",   note: 39, tie: true },
+      { word: "CRUSH", note: 38, onset: 5,  coda: 12, tng: 64,  jaw: 70,  lip: 60, vel: 0,  e_tng: 30,  e_jaw: 40,  e_lip: 40, e_vel: 0 },
+      { word: "CRUSH", note: 38, tie: true },
+      { word: "ROCK",  note: 36, onset: 27, coda: 20, tng: 80,  jaw: 120, lip: 80, vel: 0,  e_tng: 30,  e_jaw: 60,  e_lip: 60, e_vel: 0 },
+      { word: "ROCK",  note: 36, tie: true }
+    ]
+  },
+  "MADE AIR": {
+    creature: 2, bpm: 115, label: '"BREATHE IN, BREATHE OUT, I AM MADE OF AIR"',
+    steps: [
+      { word: "BREATHE",note: 64, onset: 2,  coda: 15, tng: 10, jaw: 20,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "ee",     note: 60, onset: 0,  coda: 0,  tng: 10, jaw: 20,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "IN",     note: 62, onset: 19, coda: 2,  tng: 15, jaw: 30,  lip: 85, vel: 0, e_tng: 25,  e_jaw: 40, e_lip: 70, e_vel: 80 },
+      { word: "ih",     note: 57, onset: 0,  coda: 0,  tng: 20, jaw: 35,  lip: 80, vel: 0, e_tng: 20,  e_jaw: 35, e_lip: 80, e_vel: 0 },
+      { word: "BREATHE",note: 57, onset: 2,  coda: 15, tng: 10, jaw: 20,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "ee",     note: 60, onset: 0,  coda: 0,  tng: 10, jaw: 20,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "OUT",    note: 64, onset: 0,  coda: 19, tng: 64, jaw: 110, lip: 90, vel: 0, e_tng: 110, e_jaw: 25, e_lip: 25, e_vel: 0 },
+      { word: "oo",     note: 62, onset: 0,  coda: 0,  tng: 110,jaw: 25,  lip: 25, vel: 0, e_tng: 110, e_jaw: 25, e_lip: 25, e_vel: 0 },
+      { word: "I",      note: 60, onset: 0,  coda: 0,  tng: 64, jaw: 115, lip: 90, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "ai",     note: 65, onset: 0,  coda: 0,  tng: 10, jaw: 20,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "AM",     note: 64, onset: 0,  coda: 1,  tng: 15, jaw: 115, lip: 90, vel: 0, e_tng: 15,  e_jaw: 40, e_lip: 20, e_vel: 90 },
+      { word: "ae",     note: 62, onset: 0,  coda: 0,  tng: 15, jaw: 80,  lip: 80, vel: 0, e_tng: 15,  e_jaw: 80, e_lip: 80, e_vel: 0 },
+      { word: "MADE",   note: 60, onset: 7,  coda: 22, tng: 15, jaw: 65,  lip: 85, vel: 80,e_tng: 10,  e_jaw: 25, e_lip: 90, e_vel: 0 },
+      { word: "ei",     note: 62, onset: 0,  coda: 0,  tng: 10, jaw: 25,  lip: 90, vel: 0, e_tng: 10,  e_jaw: 25, e_lip: 90, e_vel: 0 },
+      { word: "OF AIR", note: 59, onset: 28, coda: 6,  tng: 20, jaw: 60,  lip: 70, vel: 0, e_tng: 40,  e_jaw: 55, e_lip: 60, e_vel: 0 },
+      { word: "er",     note: 57, onset: 0,  coda: 6,  tng: 40, jaw: 55,  lip: 60, vel: 0, e_tng: 40,  e_jaw: 55, e_lip: 60, e_vel: 0 }
+    ]
+  },
+  "BOOTS": {
+    creature: 3, bpm: 120, label: '"BOOTS AND CATS AND BOOTS AND CATS" BEATBOX',
+    steps: [
+      { word: "BOOTS", note: 36, onset: 39, coda: 10, tng: 50, jaw: 30, lip: 10, vel: 0, e_tng: 90, e_jaw: 30, e_lip: 30, e_vel: 0 },
+      { word: "TS",    note: 0,  rest: true },
+      { word: "AND",   note: 42, onset: 41, coda: 0,  tng: 90, jaw: 40, lip: 50, vel: 0, e_tng: 90, e_jaw: 40, e_lip: 50, e_vel: 0 },
+      { word: "AND",   note: 0,  rest: true },
+      { word: "CATS",  note: 38, onset: 40, coda: 10, tng: 70, jaw: 50, lip: 20, vel: 0, e_tng: 85, e_jaw: 50, e_lip: 40, e_vel: 0 },
+      { word: "CATS",  note: 0,  rest: true },
+      { word: "AND",   note: 42, onset: 41, coda: 0,  tng: 90, jaw: 40, lip: 50, vel: 0, e_tng: 90, e_jaw: 40, e_lip: 50, e_vel: 0 },
+      { word: "AND",   note: 0,  rest: true },
+      { word: "BOOTS", note: 36, onset: 44, coda: 10, tng: 50, jaw: 30, lip: 10, vel: 0, e_tng: 90, e_jaw: 30, e_lip: 30, e_vel: 0 },
+      { word: "POP",   note: 0,  rest: true },
+      { word: "AND",   note: 42, onset: 43, coda: 0,  tng: 90, jaw: 40, lip: 50, vel: 0, e_tng: 90, e_jaw: 40, e_lip: 50, e_vel: 0 },
+      { word: "CLICK", note: 0,  rest: true },
+      { word: "CATS",  note: 38, onset: 42, coda: 10, tng: 40, jaw: 50, lip: 30, vel: 0, e_tng: 85, e_jaw: 50, e_lip: 40, e_vel: 0 },
+      { word: "RIM",   note: 0,  rest: true },
+      { word: "AND",   note: 42, onset: 41, coda: 0,  tng: 90, jaw: 40, lip: 50, vel: 0, e_tng: 90, e_jaw: 40, e_lip: 50, e_vel: 0 },
+      { word: "TS",    note: 0,  rest: true }
+    ]
+  },
+  "CLICKS": {
+    creature: 3, bpm: 124, label: '"CLICKS AND POPS VOCAL CAVITATION GROOVE"',
+    steps: [
+      { word: "KICK!",  note: 36, onset: 39, coda: 0,  tng: 20, jaw: 40, lip: 10, vel: 0, e_tng: 60,  e_jaw: 40, e_lip: 30, e_vel: 0 },
+      { word: "POP!",   note: 48, onset: 44, coda: 29, tng: 100,jaw: 20, lip: 10, vel: 0, e_tng: 100, e_jaw: 20, e_lip: 80, e_vel: 0 },
+      { word: "CLICK!", note: 60, onset: 43, coda: 28, tng: 10, jaw: 50, lip: 90, vel: 0, e_tng: 120, e_jaw: 20, e_lip: 20, e_vel: 0 },
+      { word: "HAT",    note: 60, onset: 41, coda: 0,  tng: 90, jaw: 30, lip: 60, vel: 0, e_tng: 90,  e_jaw: 30, e_lip: 60, e_vel: 0 },
+      { word: "RIM!",   note: 48, onset: 42, coda: 20, tng: 40, jaw: 80, lip: 60, vel: 0, e_tng: 40,  e_jaw: 40, e_lip: 60, e_vel: 0 },
+      { word: "CLICK!", note: 65, onset: 43, coda: 28, tng: 120,jaw: 30, lip: 30, vel: 0, e_tng: 10,  e_jaw: 30, e_lip: 90, e_vel: 0 },
+      { word: "SNARE!", note: 45, onset: 40, coda: 10, tng: 64, jaw: 50, lip: 20, vel: 0, e_tng: 64,  e_jaw: 50, e_lip: 80, e_vel: 0 },
+      { word: "POP!",   note: 60, onset: 44, coda: 29, tng: 50, jaw: 90, lip: 10, vel: 0, e_tng: 20,  e_jaw: 20, e_lip: 90, e_vel: 0 },
+      { word: "KICK!",  note: 36, onset: 39, coda: 0,  tng: 20, jaw: 40, lip: 10, vel: 0, e_tng: 60,  e_jaw: 40, e_lip: 30, e_vel: 0 },
+      { word: "CLICK",  note: 62, onset: 43, coda: 0,  tng: 20, jaw: 40, lip: 80, vel: 0, e_tng: 90,  e_jaw: 40, e_lip: 40, e_vel: 0 },
+      { word: "POP",    note: 67, onset: 44, coda: 0,  tng: 110,jaw: 25, lip: 15, vel: 0, e_tng: 20,  e_jaw: 25, e_lip: 90, e_vel: 0 },
+      { word: "HAT",    note: 60, onset: 41, coda: 0,  tng: 90, jaw: 30, lip: 60, vel: 0, e_tng: 90,  e_jaw: 30, e_lip: 60, e_vel: 0 },
+      { word: "RIM!",   note: 48, onset: 42, coda: 20, tng: 40, jaw: 80, lip: 60, vel: 0, e_tng: 40,  e_jaw: 40, e_lip: 60, e_vel: 0 },
+      { word: "POP!",   note: 64, onset: 44, coda: 0,  tng: 30, jaw: 30, lip: 15, vel: 0, e_tng: 100, e_jaw: 30, e_lip: 80, e_vel: 0 },
+      { word: "CLICK",  note: 60, onset: 43, coda: 28, tng: 10, jaw: 50, lip: 90, vel: 0, e_tng: 120, e_jaw: 20, e_lip: 20, e_vel: 0 },
+      { word: "TS",     note: 60, onset: 41, coda: 10, tng: 80, jaw: 40, lip: 50, vel: 0, e_tng: 80,  e_jaw: 40, e_lip: 50, e_vel: 0 }
+    ]
+  },
+  "RETRO": {
+    creature: 0, bpm: 108, label: '"RED ROADS RUN ROUND RETRO RIVERS"',
+    steps: [
+      { word: "RED",    note: 57, onset: 27, coda: 22, tng: 35,  jaw: 70,  lip: 70, vel: 0, e_tng: 20,  e_jaw: 70, e_lip: 80, e_vel: 0 },
+      { word: "RED",    note: 57, tie: true },
+      { word: "ROADS",  note: 60, onset: 27, coda: 11, tng: 110, jaw: 75,  lip: 35, vel: 0, e_tng: 115, e_jaw: 50, e_lip: 30, e_vel: 0 },
+      { word: "ROADS",  note: 60, tie: true },
+      { word: "RUN",    note: 62, onset: 28, coda: 2,  tng: 64,  jaw: 90,  lip: 60, vel: 0, e_tng: 64,  e_jaw: 64, e_lip: 60, e_vel: 80 },
+      { word: "RUN",    note: 62, tie: true },
+      { word: "ROUND",  note: 60, onset: 27, coda: 22, tng: 64,  jaw: 120, lip: 90, vel: 0, e_tng: 120, e_jaw: 25, e_lip: 25, e_vel: 60 },
+      { word: "ROUND",  note: 60, tie: true },
+      { word: "RE-",    note: 59, onset: 27, coda: 0,  tng: 20,  jaw: 65,  lip: 80, vel: 0, e_tng: 20,  e_jaw: 65, e_lip: 80, e_vel: 0 },
+      { word: "-TRO",   note: 57, onset: 30, coda: 0,  tng: 110, jaw: 75,  lip: 35, vel: 0, e_tng: 115, e_jaw: 60, e_lip: 30, e_vel: 0 },
+      { word: "RI-",    note: 60, onset: 27, coda: 17, tng: 25,  jaw: 35,  lip: 80, vel: 0, e_tng: 25,  e_jaw: 35, e_lip: 80, e_vel: 0 },
+      { word: "-VERS",  note: 60, tie: true },
+      { word: "R-RET",  note: 57, onset: 27, coda: 7,  tng: 50,  jaw: 64,  lip: 40, vel: 0, e_tng: 50,  e_jaw: 64, e_lip: 40, e_vel: 0 },
+      { word: "CURL",   note: 57, tie: true },
+      { word: "R-RHO",  note: 55, onset: 28, coda: 8,  tng: 70,  jaw: 70,  lip: 45, vel: 0, e_tng: 50,  e_jaw: 64, e_lip: 40, e_vel: 0 },
+      { word: "BUNCH",  note: 55, tie: true }
+    ]
+  },
+  "ELF SONG": {
+    creature: 2, bpm: 105, label: '"SILVER LIGHT SHINES IN FAIRY GLADE"',
+    steps: [
+      { word: "SIL-",   note: 72, onset: 15, coda: 5,  tng: 25,  jaw: 35,  lip: 90, vel: 0, e_tng: 40,  e_jaw: 50, e_lip: 80, e_vel: 0 },
+      { word: "-VER",   note: 72, tie: true },
+      { word: "LIGHT",  note: 74, onset: 25, coda: 19, tng: 64,  jaw: 115, lip: 90, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 95, e_vel: 0 },
+      { word: "LIGHT",  note: 74, tie: true },
+      { word: "SHINES", note: 76, onset: 17, coda: 11, tng: 64,  jaw: 115, lip: 80, vel: 0, e_tng: 10,  e_jaw: 20, e_lip: 90, e_vel: 60 },
+      { word: "SHINES", note: 76, tie: true },
+      { word: "IN",     note: 79, onset: 19, coda: 2,  tng: 25,  jaw: 35,  lip: 85, vel: 0, e_tng: 25,  e_jaw: 35, e_lip: 85, e_vel: 80 },
+      { word: "IN",     note: 79, tie: true },
+      { word: "FAI-",   note: 76, onset: 11, coda: 0,  tng: 15,  jaw: 65,  lip: 85, vel: 0, e_tng: 10,  e_jaw: 25, e_lip: 95, e_vel: 0 },
+      { word: "-RY",    note: 74, onset: 29, coda: 0,  tng: 10,  jaw: 15,  lip: 95, vel: 0, e_tng: 10,  e_jaw: 15, e_lip: 95, e_vel: 0 },
+      { word: "GLADE",  note: 72, onset: 6,  coda: 22, tng: 15,  jaw: 65,  lip: 85, vel: 0, e_tng: 10,  e_jaw: 25, e_lip: 90, e_vel: 0 },
+      { word: "GLADE",  note: 72, tie: true },
+      { word: "AIR",    note: 72, onset: 28, coda: 6,  tng: 20,  jaw: 60,  lip: 70, vel: 0, e_tng: 40,  e_jaw: 55, e_lip: 60, e_vel: 0 },
+      { word: "AIR",    note: 72, tie: true },
+      { word: "WIND",   note: 72, onset: 23, coda: 22, tng: 30,  jaw: 35,  lip: 40, vel: 0, e_tng: 20,  e_jaw: 40, e_lip: 80, e_vel: 60 },
+      { word: "WIND",   note: 72, tie: true }
+    ]
+  }
+};
+
+let SENTENCE = PHRASES["NOICE"].steps;
 
 // Page Map
 const PAGES = {
@@ -577,18 +791,30 @@ function processAudio(e) {
   
   // Physics parameters from UI state
   const isSounding = state.noteActive || state.p.voicing > 64;
-  const f0 = state.currentFreq;
+  // Creature pitch shift (TROLL -1 oct, ELF +1 oct)
+  let pitchMult = 1.0;
+  if (state.creature === 1) pitchMult = 0.5;
+  else if (state.creature === 2) pitchMult = 2.0;
+
+  const f0 = state.currentFreq * pitchMult;
   const dt = f0 / sr;
   const wallLoss = 0.985 - (state.p.wall_q / 127) * 0.018;
   const velumOpen = state.morph.curVelum / 127;
   const lipOpen = state.morph.curLips / 127;
   const growlAmt = state.p.growl / 127;
 
-  const isOnsetRetroflex = (state.p.onset === 4); // R-RET [ɻ]
-  const isOnsetFricative = (state.p.onset === 6 || state.p.onset === 7 || state.p.onset === 1); // s, sh, h
-  const isOnsetStop = (state.p.onset === 8 || state.p.onset === 9); // t, p
+  const meta = ONSET_META[state.p.onset] || ONSET_META[0];
+  const constrSec = Math.max(1, Math.min(41, meta.c * 2));
+  const isOnsetRetroflex = (state.p.onset === 27 || state.p.onset === 30 || state.p.onset === 31 || state.p.onset === 32 || state.p.coda === 7);
+  const isOnsetFricative = (meta.m === 2 || meta.m === 4);
+  const isOnsetStop = (meta.m === 0);
+  const isVoiceless = (meta.v === 0);
+  const isBeatbox = (state.p.onset >= 39);
 
   for (let i = 0; i < n; i++) {
+    const es = state.morph.elapsedSamples;
+    if (isSounding) state.morph.elapsedSamples++;
+
     let excitation = 0;
     if (isSounding) {
       glottalPhase += dt;
@@ -603,6 +829,13 @@ function processAudio(e) {
         excitation = 0;
       }
       
+      // Creature fold coloring
+      if (state.creature === 1) { // TROLL ventricular subharmonic
+        excitation += Math.sin(glottalPhase * Math.PI) * 0.25;
+      } else if (state.creature === 3) { // BEAST asymmetric overdrive
+        excitation = Math.tanh(excitation * 2.2) * 0.9;
+      }
+
       // Breath noise turbulence
       const noise = (Math.random() * 2 - 1) * (state.p.breath / 127) * 0.25;
       excitation += noise;
@@ -610,6 +843,18 @@ function processAudio(e) {
       // Tracheal chest pulse
       const trachPulse = Math.sin(glottalPhase * Math.PI * 4) * (state.p.trachea / 127) * 0.15;
       excitation += trachPulse;
+
+      // Voice Onset Time (VOT): suppress voiced buzz during initial unvoiced closure/burst
+      if (isVoiceless && (isBeatbox ? es < 2600 : es < 1800)) {
+        excitation = excitation * 0.12 + (Math.random() * 2 - 1) * 0.25;
+      }
+
+      // Beatbox Kick sub-bass lip thump (110 Hz -> 55 Hz in first 34 ms)
+      if (state.p.onset === 39 && es < 1500) {
+        const kEnv = (1500 - es) / 1500;
+        const kPhase = 2 * Math.PI * (110 * (es / sr) - 220 * Math.pow(es / sr, 2));
+        excitation += Math.sin(kPhase) * kEnv * 0.85;
+      }
     }
 
     // Kelly-Lochbaum Waveguide Simulation
@@ -619,10 +864,10 @@ function processAudio(e) {
     for (let j = 0; j < 43; j++) {
       let r = 0.05;
       if (isOnsetRetroflex) {
-        // Retroflex [ɻ]: section 15 constriction, section 18 sublingual expansion
-        if (j === 15) r = 0.65;
-        else if (j === 18) r = -0.3;
-        else if (j === 6) r = 0.35;
+        // Retroflex [ɻ, ʈ, ɖ, ʂ]: section 30 constriction, section 36 sublingual cavity
+        if (j === 30) r = 0.65;
+        else if (j === 36) r = -0.3;
+        else if (j === 12) r = 0.35;
         else {
           const tPos = state.morph.curTongue / 127;
           r = (tPos - 0.5) * 0.4;
@@ -633,20 +878,31 @@ function processAudio(e) {
       } else if (j === 42) { // Lip aperture
         r = 0.8 - lipOpen * 0.7;
       }
+
+      // Localized constriction impedance during early onset (~80 ms)
+      if (isSounding && state.p.onset > 0 && es < 3500 && j === constrSec) {
+        r = isOnsetStop ? 0.78 : (isOnsetFricative ? 0.68 : 0.45);
+      }
       
-      // Consonant aerodynamic turbulence injection
-      if (state.morph.phase < 0.25 && isSounding) {
-        if (isOnsetFricative && (j === 20 || j === 15)) {
-          waveguideR[j] += (Math.random() * 2 - 1) * 0.15;
-        } else if (isOnsetStop && (j === 22 || j === 42) && state.morph.phase < 0.08) {
-          waveguideR[j] += (Math.random() * 2 - 1) * 0.22;
+      // Consonant aerodynamic turbulence & beatbox cavitation impulses
+      if (isSounding && state.p.onset > 0) {
+        if (isOnsetFricative && es < 4000 && j === constrSec) {
+          waveguideR[j] += (Math.random() * 2 - 1) * (state.p.onset === 41 ? 0.35 : 0.2);
+        } else if (isOnsetStop && es < 1400 && j === constrSec) {
+          waveguideR[j] += (Math.random() * 2 - 1) * 0.25;
+        }
+        if ((state.p.onset === 42 || state.p.onset === 43 || state.p.onset === 44) && es < 260 && j === constrSec) {
+          const cEnv = (260 - es) / 260;
+          waveguideR[j] += Math.sin((es / sr) * 2 * Math.PI * 1250) * cEnv * 0.9;
         }
       }
 
       const fwd = waveguideR[j];
       const rev = waveguideL[j + 1];
-      waveguideR[j + 1] = (fwd * (1 - r) + rev * r) * wallLoss;
-      waveguideL[j] = (rev * (1 + r) - fwd * r) * wallLoss;
+      const nextR = (fwd * (1 - r) + rev * r) * wallLoss;
+      const nextL = (rev * (1 + r) - fwd * r) * wallLoss;
+      waveguideR[j + 1] = Math.max(-4.0, Math.min(4.0, nextR));
+      waveguideL[j] = Math.max(-4.0, Math.min(4.0, nextL));
     }
 
     // Nasal branch reflection
@@ -665,13 +921,15 @@ function processAudio(e) {
     let sample = mouthRad - radFilter;
     radFilter = mouthRad * 0.95;
 
-    // Growl Overdrive Distortion
+    // Growl Overdrive Distortion & Soft Knee Limiter
     if (growlAmt > 0) {
       sample = Math.tanh(sample * (1 + growlAmt * 4));
+    } else {
+      sample = Math.tanh(sample * 0.75);
     }
 
-    out[i] = sample * 0.4;
-    state.morph.mouthAcousticPulse = Math.abs(sample);
+    out[i] = sample * 0.45;
+    state.morph.mouthAcousticPulse = Math.min(1.5, Math.abs(sample));
   }
 }
 
@@ -686,6 +944,13 @@ function togglePlay() {
   if (state.playing) {
     playBtn.classList.add('playing');
     playIcon.textContent = '■';
+    state.seqStep = 0;
+    document.getElementById('active-step-num').textContent = 1;
+    const firstStep = SENTENCE[0];
+    if (firstStep && !firstStep.tie && !firstStep.rest) {
+      triggerSyllable(firstStep);
+    }
+    updateKeyHighlights();
     startSequencer();
   } else {
     playBtn.classList.remove('playing');
@@ -695,6 +960,7 @@ function togglePlay() {
 }
 
 function startSequencer() {
+  if (seqTimer) clearInterval(seqTimer);
   const stepMs = (60000 / state.bpm) / 4; // 16th notes
   seqTimer = setInterval(() => {
     stepSequencer();
@@ -702,7 +968,10 @@ function startSequencer() {
 }
 
 function stopSequencer() {
-  if (seqTimer) clearInterval(seqTimer);
+  if (seqTimer) {
+    clearInterval(seqTimer);
+    seqTimer = null;
+  }
   state.noteActive = false;
   updateKeyHighlights();
 }
@@ -713,8 +982,17 @@ function stepSequencer() {
   
   const stepData = SENTENCE[state.seqStep];
   if (stepData) {
-    if (!stepData.tie) {
+    if (stepData.rest) {
+      state.noteActive = false;
+      if (stepData.word) {
+        state.wordBanner = stepData.word;
+        document.getElementById('sentence-word').textContent = `"${stepData.word}"`;
+      }
+    } else if (!stepData.tie) {
       triggerSyllable(stepData);
+    } else if (stepData.word) {
+      state.wordBanner = stepData.word;
+      document.getElementById('sentence-word').textContent = `"${stepData.word}"`;
     }
   }
   updateKeyHighlights();
@@ -749,6 +1027,7 @@ function triggerSyllable(d) {
   state.morph.phase = 0.0;
   state.morph.dir = 1;
   state.morph.holdTimer = 0;
+  state.morph.elapsedSamples = 0;
   state.morph.active = true;
   updateKnobDisplays();
 }
@@ -759,6 +1038,7 @@ function triggerReSpeak() {
   state.morph.phase = 0.0;
   state.morph.dir = 1;
   state.morph.holdTimer = 0;
+  state.morph.elapsedSamples = 0;
   state.morph.active = true;
   setTimeout(() => {
     if (!state.playing) {
@@ -965,7 +1245,7 @@ function drawLCD() {
   ctx.stroke();
 
   // 2. Muscular Tongue with Retroflex [ɻ] Curl Support
-  const isRetroflex = (isPhonemesMode && state.p.onset === 4) || (state.morph.active && state.p.onset === 4);
+  const isRetroflex = (state.p.onset === 27 || state.p.onset === 30 || state.p.onset === 31 || state.p.onset === 32 || state.p.coda === 7);
   ctx.strokeStyle = '#f87171';
   ctx.fillStyle = 'rgba(248, 113, 113, 0.25)';
   ctx.lineWidth = 3.5;
@@ -982,10 +1262,14 @@ function drawLCD() {
     ctx.lineTo(ox + 14, oy - 24);
     ctx.lineTo(ox + 25, oy + 25 + jawDrop);
   } else {
+    const frontness = 1.0 - (state.morph.curTongue / 127);
+    const closeness = 1.0 - (state.morph.curJaw / 127);
+    const dorsumX = ox - 14 + frontness * 34;
+    const dorsumY = oy + 12 + jawDrop * 0.4 - closeness * 34 * tractScale;
     ctx.bezierCurveTo(
-      ox - 20, oy + 10 - tngArch * 0.5,
-      ox - 5 + (state.morph.curTongue - 64) * 0.3, oy - 15 - tngArch,
-      ox + 35, oy - 10 + jawDrop * 0.3
+      ox - 20, oy + 12 - closeness * 10 * tractScale,
+      dorsumX, dorsumY,
+      ox + 35, oy - 10 + jawDrop * 0.45
     );
     ctx.lineTo(ox + 45, oy - 5 + jawDrop * 0.5); // Tip
     ctx.lineTo(ox + 30, oy + 25 + jawDrop); // Lower floor
@@ -994,21 +1278,37 @@ function drawLCD() {
   ctx.fill();
   ctx.stroke();
 
-  // Active Phoneme Constriction Crosshair Marker
-  if (isPhonemesMode && state.p.onset > 0) {
-    const cSites = [
-      { x: ox, y: oy }, // 0: OFF
-      { x: ox - 28, y: oy + 35 }, // 1: h (glottis)
-      { x: ox + 65, y: oy - 10 + jawDrop * 0.5 }, // 2: m (bilabial)
-      { x: ox + 22, y: oy - 24 }, // 3: r (postalveolar)
-      { x: ox + 20, y: oy - 35 }, // 4: R-RET (retroflex curled palate)
-      { x: ox + 5,  y: oy - 20 }, // 5: R-RHO (rhotic bunched)
-      { x: ox + 38, y: oy - 22 }, // 6: s (alveolar ridge)
-      { x: ox + 25, y: oy - 24 }, // 7: sh (postalveolar)
-      { x: ox + 42, y: oy - 22 }, // 8: t (alveolar stop)
-      { x: ox + 68, y: oy - 10 + jawDrop * 0.5 } // 9: p (bilabial burst)
+  // Active Phoneme Constriction Crosshair Marker (all 44 onsets via ONSET_META[onset].c)
+  if ((isPhonemesMode || (state.noteActive && state.morph.elapsedSamples < 5000)) && state.p.onset > 0) {
+    const CONSTR_XY = [
+      [-28,  35, 0],   // 0: glottis
+      [-28,  25, 0],   // 1: lower pharynx
+      [-28,  15, 0],   // 2: mid pharynx
+      [-28,   5, 0],   // 3: upper pharynx
+      [-25,  -8, 0],   // 4: lower uvula
+      [-16, -20, 0],   // 5: uvula
+      [-12, -22, 0],   // 6: post-velar
+      [ -7, -23, 0],   // 7: velar nasal
+      [ -2, -24, 0],   // 8: velar
+      [  4, -24, 0],   // 9: pre-velar
+      [  8, -23, 0],   // 10: labiovelar
+      [ 12, -24, 0],   // 11: mid palate
+      [ 16, -24, 0],   // 12: front palate
+      [ 20, -24, 0],   // 13: prepalate
+      [ 24, -24, 0],   // 14: palatal
+      [ 26, -25, 0],   // 15: postalveolar / retroflex
+      [ 34, -24, 0],   // 16: alveolar-palatal
+      [ 42, -22, 0],   // 17: alveolar
+      [ 50, -19, 0],   // 18: dental
+      [ 58, -14, 0.3], // 19: labiodental
+      [ 63, -12, 0.4], // 20: inner bilabial
+      [ 67, -10, 0.5]  // 21: bilabial lips
     ];
-    const pos = cSites[state.p.onset] || cSites[0];
+    const metaC = (ONSET_META[state.p.onset] || ONSET_META[0]).c;
+    const pt = CONSTR_XY[Math.max(0, Math.min(21, metaC))];
+    const pos = (isRetroflex && metaC === 15)
+      ? { x: ox + 20, y: oy - 35 }
+      : { x: ox + pt[0], y: oy + pt[1] + jawDrop * pt[2] };
     ctx.strokeStyle = '#fbbf24';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -1243,24 +1543,67 @@ navBtns.forEach(b => {
   });
 });
 
-// Creature Selector
+// Creature Selector & Physics Archetypes
+function applyCreature(cIdx) {
+  state.creature = cIdx;
+  document.querySelectorAll('.c-pill').forEach(p => {
+    p.classList.toggle('active', parseInt(p.dataset.creature) === cIdx);
+  });
+
+  if (cIdx === 0) { // HUMAN
+    state.p.tract_len = 64; state.p.wall_q = 64; state.p.trachea = 40; state.p.growl = 0;
+  } else if (cIdx === 1) { // TROLL (Deep, large tract)
+    state.p.tract_len = 110; state.p.wall_q = 95; state.p.trachea = 80; state.p.growl = 20;
+  } else if (cIdx === 2) { // ELF (Small, bright, high resonance)
+    state.p.tract_len = 25; state.p.wall_q = 30; state.p.trachea = 15; state.p.growl = 0;
+  } else if (cIdx === 3) { // BEAST (Overdriven growl)
+    state.p.tract_len = 90; state.p.wall_q = 80; state.p.trachea = 90; state.p.growl = 85;
+  }
+  updateKnobDisplays();
+}
+
 document.querySelectorAll('.c-pill').forEach(pill => {
   pill.addEventListener('click', () => {
-    document.querySelectorAll('.c-pill').forEach(p => p.classList.remove('active'));
-    pill.classList.add('active');
-    state.creature = parseInt(pill.dataset.creature);
-    
-    // Apply Creature Physics Archetype
-    if (state.creature === 0) { // HUMAN
-      state.p.tract_len = 64; state.p.wall_q = 64; state.p.trachea = 40; state.p.growl = 0;
-    } else if (state.creature === 1) { // TROLL (Deep, large tract)
-      state.p.tract_len = 110; state.p.wall_q = 95; state.p.trachea = 80; state.p.growl = 20;
-    } else if (state.creature === 2) { // ELF (Small, bright, high resonance)
-      state.p.tract_len = 25; state.p.wall_q = 30; state.p.trachea = 15; state.p.growl = 0;
-    } else if (state.creature === 3) { // BEAST (Overdriven growl)
-      state.p.tract_len = 90; state.p.wall_q = 80; state.p.trachea = 90; state.p.growl = 85;
-    }
+    applyCreature(parseInt(pill.dataset.creature));
+  });
+});
+
+// Phrase Switcher Bar
+function selectPhrase(phraseName) {
+  const ph = PHRASES[phraseName];
+  if (!ph) return;
+  state.activePhrase = phraseName;
+  SENTENCE = ph.steps;
+  state.seqStep = 0;
+  state.bpm = ph.bpm;
+  document.querySelectorAll('.phrase-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.phrase === phraseName);
+  });
+  applyCreature(ph.creature);
+  document.getElementById('active-step-num').textContent = 1;
+  document.getElementById('tempo-bpm').textContent = ph.bpm;
+  document.getElementById('sentence-word').textContent = ph.label;
+  state.wordBanner = phraseName;
+
+  if (SENTENCE[0] && !SENTENCE[0].tie && !SENTENCE[0].rest) {
+    const d = SENTENCE[0];
+    state.p.tongue = d.tng; state.p.jaw = d.jaw; state.p.lips = d.lip; state.p.velum = d.vel;
+    state.p.end_tongue = d.e_tng; state.p.end_jaw = d.e_jaw; state.p.end_lips = d.e_lip; state.p.end_velum = d.e_vel;
+    state.p.onset = d.onset || 0; state.p.coda = d.coda || 0;
     updateKnobDisplays();
+  }
+  if (state.playing) {
+    if (SENTENCE[0] && !SENTENCE[0].tie && !SENTENCE[0].rest) {
+      triggerSyllable(SENTENCE[0]);
+    }
+    startSequencer();
+  }
+  updateKeyHighlights();
+}
+
+document.querySelectorAll('.phrase-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectPhrase(btn.dataset.phrase);
   });
 });
 
@@ -1328,6 +1671,7 @@ function noteOn(midi, velocity = 100) {
   state.morph.phase = 0.0;
   state.morph.dir = 1;
   state.morph.holdTimer = 0;
+  state.morph.elapsedSamples = 0;
   state.morph.active = true;
   const k = document.getElementById(`key-${midi}`);
   if (k) k.classList.add('active');
@@ -1352,7 +1696,7 @@ function updateKeyHighlights() {
       led.classList.remove('current', 'lit');
       if (s === state.seqStep && state.playing) {
         led.classList.add('current');
-      } else if (!SENTENCE[s].tie) {
+      } else if (!SENTENCE[s].tie && !SENTENCE[s].rest) {
         led.classList.add('lit');
       }
     }

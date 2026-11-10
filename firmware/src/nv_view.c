@@ -116,6 +116,18 @@ void nv_view_render_strip(uint16_t *buf, int32_t strip_y, int32_t strip_h,
                 live_tongue[i].x = (int16_t)(top_x + (((bot_x - top_x) * (int32_t)fy) >> 8));
                 live_tongue[i].y = (int16_t)(top_y + (((bot_y - top_y) * (int32_t)fy) >> 8));
             }
+            /* Retroflex tongue curl for R-RET (27), T-RET (30), D-RET (31), S-RET (32), or Coda R-RET (7) */
+            {
+                int32_t on_id = params ? params[P_E5] : (int32_t)a->onset_idx;
+                int32_t co_id = params ? params[P_E6] : (int32_t)a->coda_idx;
+                if (on_id == 27 || on_id == 30 || on_id == 31 || on_id == 32 || co_id == 7) {
+                    for (i = 38; i < 48 && i < NV_NTONGUE; i++) {
+                        int32_t dist = (int32_t)(i - 37); /* 1..10 */
+                        live_tongue[i].x -= (int16_t)(dist * 2);
+                        live_tongue[i].y -= (int16_t)(dist * 2);
+                    }
+                }
+            }
             nv_vec_poly(buf, w, h, live_tongue, NV_NTONGUE, strip_y, NV_SWAP16(NV_COL_GREEN));
 
             /* Highlight consonant constriction in PHONEMES mode */

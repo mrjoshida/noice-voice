@@ -21,18 +21,22 @@ An interactive **Web Simulator** is included in [`sim/index.html`](sim/index.htm
   - Lip radiation impedance filter with fleshy pink lip opening and protrusion.
   - Subglottal tracheal pulse coupling for resonant chest warmth.
 
+- **Articulatory Phoneme Engine (44 Onsets, 29 Codas & Beatbox)**:
+  - **44 Onset Phonemes** across stops (`/p, b, t, d, k, g, ʔ, q/`), nasals (`/m, n, ŋ, ɲ/`), fricatives (`/f, v, θ, ð, s, z, ʃ, ʒ, h, x, ʁ, ħ, ʕ/`), affricates (`/tʃ, dʒ, ts/`), liquids/retroflexes (`/w, j, l, r, ɻ, ɹ, ɾ, ʈ, ɖ, ʂ/`), and non-pulmonic vocal beatbox percussion (`KICK`, `SNARE`, `HIHAT`, `RIM`, `CLICK`, `POP`).
+  - **29 Coda Phonemes** including nasal closures, liquid/retroflex releases, fricative tails, stops, affricates, glottal stops, and clicks.
+  - **Voice Onset Time (VOT) & Cavitation Physics**: Suppresses voiced glottal excitation during voiceless closures/bursts and triggers beatbox sub-bass pitch drop + lingual click impulses.
+
 - **Real-Time Mid-Sagittal LCD Visualization (240×240)**:
   - Cranium, cervical spine, nasal cavity, and hard palate anatomy.
-  - Live 4-anchor muscular tongue spline responding dynamically to `TONGUE` and `JAW` controls.
-  - Retractable soft palate velum opening to ventilate the nasal chamber.
-  - Highlighting pink fleshy lips (`#f472b6`) opening and protruding with lip aperture.
-  - Acoustic particle/wavefront radiation pulsing outward from the mouth in real time.
+  - Live muscular tongue spline responding dynamically to `TONGUE`, `JAW`, and curled retroflex (`R-RET`, `T-RET`, `D-RET`, `S-RET`) postures.
+  - Constriction site indicator across all 22 anatomical tube sections and context-aware page visualizers (`MOUTH`, `END MOUTH`, `PHONEMES`, `ENV TIME`, `END SHAPE`, `RESONANCE`).
+  - Retractable soft palate velum opening to ventilate the nasal chamber, highlighting pink fleshy lips (`#f472b6`), and live acoustic radiation wavefronts.
   - 2D Formant Vowel Quad chart (`[i]`, `[e]`, `[a]`, `[o]`, `[u]`) with real-time tracking crosshair.
   - Syllable transition progress banner and live 4-column parameter cards.
 
 - **4 Vocal Creature Archetypes**:
   1. **HUMAN**: Standard 17.5 cm vocal tract, natural speech formants, balanced vocal warmth.
-  2. **TROLL**: Cavernous 24.0 cm elongated airway, deep guttural formant downward shift, resonant subglottal chest pulse.
+  2. **TROLL**: Cavernous 24.0 cm elongated airway, deep guttural formant downward shift, ventricular subharmonic + subglottal chest pulse.
   3. **ELF**: Agile 13.5 cm shortened airway, bright bell-like high formant resonances, rapid articulatory transients.
   4. **BEAST**: Predatory 21.0 cm airway with growl overdrive saturation, harsh tracheal turbulence, heavy sub-bass drone.
 
@@ -41,32 +45,36 @@ An interactive **Web Simulator** is included in [`sim/index.html`](sim/index.htm
     - Start Articulators: `TONGUE`, `JAW`, `LIPS`, `VELUM`
     - Target Articulators: `END TNG`, `END JAW`, `END LIP`, `END VEL`
   - Articulatory Envelope Controls:
-    - `SPEED`: Syllable transition duration (10 ms to 1.5 s).
-    - `HOLD`: Duration the vocal tract sustains the target position before releasing.
-    - `RETURN`: Time taken to transition back to rest or next phoneme.
-    - `MODE`: `GLIDE` (continuous morph), `RETURN` (spring back), `BOUNCE` (damped oscillation), `TOUCH` (velocity-scaled).
+    - `SPEED`: Syllable transition duration (`2 ms` to `4.5 s`).
+    - `HOLD`: Duration the vocal tract sustains the target position before returning.
+    - `RETURN`: Time taken to transition back to start posture.
+    - `MODE`: `GLIDE` (continuous morph), `RETURN` (glide & return on release), `BOUNCE` (cyclic oscillation), `TOUCH` (velocity/pressure-scaled).
 
-- **16-Step Sequencer & Speech Sentence Engine**:
-  - Preloaded factory speech sentence: **"NOICE VOICE CAN SPEAK WORDS TO YOU NOW"**.
-  - 16 steps with per-step parameter locks (`motion_set_lock`) controlling start articulators, target articulators, and pitch melody ($A3 \rightarrow B3 \rightarrow C4 \rightarrow D4 \rightarrow C4 \rightarrow B3 \rightarrow A3 \rightarrow G3$).
-  - Pressing `PLAY` immediately speaks the sentence with synchronized 60 FPS vocal tract animation.
+- **16-Step Sequencer & 4-Track Speech Sentence Engine**:
+  - **Preloaded across all 4 hardware tracks at boot (`110 BPM`)** using `motion_set_event` / `motion_set_lock` parameter locks:
+    - **Track 1 (`HUMAN`)**: *"NOICE VOICE CAN SPEAK WORDS TO YOU NOW"*
+    - **Track 2 (`TROLL`)**: *"DEEP CAVE OGRES ROAR AND CRUSH ROCK"* (with pharyngeal/uvular/retroflex growls)
+    - **Track 3 (`ELF`)**: *"BREATHE IN BREATHE OUT I AM MADE OF AIR"*
+    - **Track 4 (`BEAST`)**: *"BOOTS AND CATS AND BOOTS AND CATS"* (vocal beatbox groove)
+  - Web Simulator includes 7 selectable phrases (`NOICE`, `OGRE`, `MADE AIR`, `BOOTS`, `CLICKS`, `RETRO`, `ELF SONG`).
+  - Pressing `PLAY` immediately speaks with synchronized 60 FPS vocal tract animation.
 
 ---
 
 ## Hardware Navigation & Page Map
 
-All FM-1 hardware buttons are mapped to dedicated vocal synthesis parameter families with cycling page counters (`[1/3]`, `[2/3]`, etc.):
+All FM-1 hardware buttons are mapped to dedicated vocal synthesis parameter families with cycling page counters (`[1/4]`, `[2/4]`, etc.):
 
-| Button | Family | Page 1 | Page 2 | Page 3 |
-|---|---|---|---|---|
-| **HOME** | `HOME` | **VOCAL TRACT** (Midsagittal Vector Art + Live Formant Quad) | — | — |
-| **EDIT** | `FAM_EDIT` | **MOUTH [1/3]**<br>`TONGUE`, `JAW`, `LIPS`, `VELUM` | **END MOUTH [2/3]**<br>`END TNG`, `END JAW`, `END LIP`, `END VEL` | **GLOTTIS [3/3]**<br>`BODY`, `CHOIR`, `TOUCH`, `VOICING` |
-| **ENV** | `FAM_ENV` | **ENV TIME [1/3]**<br>`SPEED`, `HOLD`, `RETURN`, `MODE` | **END SHAPE [2/3]**<br>`END TNG`, `END JAW`, `END LIP`, `END VEL` | **BREATH [3/3]**<br>`ATTACK`, `RELEASE`, `TENSION`, `BREATH` |
-| **FX** | `FAM_FX` | **RESONANCE [1/2]**<br>`WALL Q`, `TRACT LEN`, `TRACHEA`, `NASAL Q` | **SPACE [2/2]**<br>`GROWL`, `CHORUS`, `DELAY`, `REVERB` | — |
-| **SEQ** | `FAM_SEQ` | **STEP [1/1]**<br>16-Step Piano Roll & Parameter Lock Editor | — | — |
-| **SCL** | `FAM_SCL` | **SCALE [1/1]**<br>`ROOT`, `SCALE`, `QUANT`, `TRANS` | — | — |
-| **LFO** | `FAM_LFO` | **VIBRATO [1/1]**<br>`VIB DEPTH`, `VIB RATE`, `FADE IN`, `GLIDE` | — | — |
-| **SAVE** | `FAM_SAVE` | **USER [1/2]**<br>User Patch Storage | **PRESETS [2/2]**<br>32 Creature Presets Browser | — |
+| Button | Family | Page 1 | Page 2 | Page 3 | Page 4 |
+|---|---|---|---|---|---|
+| **HOME** | `HOME` | **VOCAL TRACT** (Midsagittal Vector Art + Live Formant Quad) | — | — | — |
+| **EDIT** | `FAM_EDIT` | **MOUTH [1/4]**<br>`TONGUE`, `JAW`, `LIPS`, `VELUM` | **END MOUTH [2/4]**<br>`END TNG`, `END JAW`, `END LIP`, `END VEL` | **PHONEMES [3/4]**<br>`ONSET`, `CODA`, `BODY`, `CHOIR` | **GLOTTIS [4/4]**<br>`TENSION`, `BREATH`, `AT`, `VCE` |
+| **ENV** | `FAM_ENV` | **ENV TIME [1/3]**<br>`SPEED`, `HOLD`, `RETURN`, `MODE` | **END SHAPE [2/3]**<br>`END TNG`, `END JAW`, `END LIP`, `END VEL` | **BREATH [3/3]**<br>`ATK`, `REL`, `TENSION`, `BREATH` | — |
+| **FX** | `FAM_FX` | **RESONANCE [1/2]**<br>`WALL Q`, `LENGTH`, `TRACHEA`, `NASAL Q` | **SPACE [2/2]**<br>`DST`, `CHO`, `DLY`, `REV` | — | — |
+| **SEQ** | `FAM_SEQ` | **STEP [1/1]**<br>16-Step Piano Roll & Parameter Lock Editor | — | — | — |
+| **SCL** | `FAM_SCL` | **SCALE [1/1]**<br>`ROOT`, `SCL`, `QNT`, `TRN` | — | — | — |
+| **LFO** | `FAM_LFO` | **VIBRATO [1/1]**<br>`DEPTH`, `RATE`, `FADE`, `GLD` | — | — | — |
+| **SAVE** | `FAM_SAVE` | **PRESETS [1/2]**<br>48 Creature Presets Browser | **USER [2/2]**<br>User Patch Storage | — | — |
 
 ### Transport & Action Buttons
 - **`PLAY`**: Starts or stops 16-step sequencer playback (illuminates bright green when playing).
@@ -75,20 +83,24 @@ All FM-1 hardware buttons are mapped to dedicated vocal synthesis parameter fami
 
 ---
 
-## 32 Creature Presets
+## 48 Creature Presets
 
-NOICE VOICE includes 32 built-in presets across the 4 creatures (8 presets per engine):
+NOICE VOICE includes 48 built-in presets across the 4 creatures (12 presets per engine), each defining mouth postures, onsets/codas, envelope dynamics, and vocal tract resonance:
 
 | # | HUMAN (Eng 5) | TROLL (Eng 6) | ELF (Eng 7) | BEAST (Eng 8) |
 |---|---|---|---|---|
-| **0** | **YOU** (`/j/` $\rightarrow$ `/u/`) | **GRUNT** (`/g/` $\rightarrow$ `/uh/`) | **BELL** (`/b/` $\rightarrow$ `/e/`) | **ROAR** (`/r/` $\rightarrow$ `/a/`) |
-| **1** | **WOW** (`/w/` $\rightarrow$ `/a/`) | **BOULDER** (`/b/` $\rightarrow$ `/o/`) | **WHISPER** (`/w/` $\rightarrow$ `/i/`) | **SNARL** (`/s/` $\rightarrow$ `/a/`) |
-| **2** | **NOICE** (`/n/` $\rightarrow$ `/oi/`) | **DEEP** (`/d/` $\rightarrow$ `/i/`) | **SING** (`/s/` $\rightarrow$ `/i/`) | **GROWL** (`/g/` $\rightarrow$ `/o/`) |
-| **3** | **BABY** (`/b/` $\rightarrow$ `/e/`) | **CAVE** (`/k/` $\rightarrow$ `/e/`) | **CHIRP** (`/ch/` $\rightarrow$ `/i/`) | **HISS** (`/h/` $\rightarrow$ `/s/`) |
-| **4** | **CHEST** (`/ch/` $\rightarrow$ `/e/`) | **SLUMBER** (`/s/` $\rightarrow$ `/uh/`) | **CRYSTAL** (`/k/` $\rightarrow$ `/i/`) | **BITE** (`/b/` $\rightarrow$ `/ai/`) |
-| **5** | **CHOIR** (`/k/` $\rightarrow$ `/w/`) | **HOLLOW** (`/h/` $\rightarrow$ `/a/`) | **AIR** (`/e/` $\rightarrow$ `/uh/`) | **HOWL** (`/h/` $\rightarrow$ `/u/`) |
-| **6** | **TALK** (`/t/` $\rightarrow$ `/o/`) | **THUNDER** (`/th/` $\rightarrow$ `/uh/`) | **SIREN** (`/s/` $\rightarrow$ `/ai/`) | **SCRAPE** (`/s/` $\rightarrow$ `/e/`) |
-| **7** | **SCREAM** (`/s/` $\rightarrow$ `/i/`) | **EARTH** (`/uh/` $\rightarrow$ `/th/`) | **NYMPH** (`/n/` $\rightarrow$ `/i/`) | **PREDATOR** (`/p/` $\rightarrow$ `/e/`) |
+| **0** | **AH MALE** | **DEEP GROWL** | **SILVER** | **SNARL** |
+| **1** | **WEE** | **CAVE ROAR** | **AIRY WE** | **PREDATOR** |
+| **2** | **YOU** | **GUTTURAL** | **SPELL** | **HOWL** |
+| **3** | **WHY** | **BOULDER** | **WHISPER** | **GUTTURAL** |
+| **4** | **NOISE** | **OGRE WA** | **CHIME** | **BITE** |
+| **5** | **MA-MA** | **TOMB** | **FAIRY** | **FRENZY** |
+| **6** | **LA-LA** | **GIANT LA** | **MOONLIGHT** | **CHITIN** |
+| **7** | **CHOIR 3** | **WAR CHANT** | **HIGH CHOIR** | **PACK** |
+| **8** | **RETRO-R** (`/ɻ/` -> `/ɻ/`) | **UVULAR KH** (`/q/` -> `/k/`) | **LIQUID L** (`/l/` -> `/l/`) | **CLICK-POP** (`CLICK` -> `POP`) |
+| **9** | **TH-FLOW** (`/θ/` -> `/ð/`) | **PHARYNX** (`/ħ/`) | **FLAPTAP** (`/ɾ/` -> `/ɾ/`) | **EJECT-K** (`KICK` -> `/p/`) |
+| **10** | **CH-BURST** (`/tʃ/` -> `/tʃ/`) | **THUD** (`KICK` -> `/b/`) | **NY-SONG** (`/ɲ/` -> `/ɲ/`) | **RIMSHOT** (`RIM` -> `/k/`) |
+| **11** | **BEATBOX** (`KICK` -> `CLICK`) | **GROWL TR** (`/r/` -> `/r/`) | **SH-WIND** (`/ʃ/` -> `/ʃ/`) | **SNARE-X** (`SNARE` -> `/f/`) |
 
 ---
 

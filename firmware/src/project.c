@@ -625,7 +625,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
             if (q->fm6[t][i] > 127u) return 0;
     if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
-    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[66] = P_COUNT;
+    memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel; b[63] = q->parts; b[64] = q->phys; b[65] = q->rsv; b[66] = P_COUNT;
     for (t = 0; t < NTRK; t++) {
         for (i = 0; i < P_COUNT; i++) {
             if (q->t[t].p[i] < -64 || q->t[t].p[i] > 127) return 0;
@@ -710,6 +710,7 @@ static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
         return 0;
     memset(q, 0, sizeof *q); q->magic = PROJ_MAGIC; q->size = sizeof *q;
     memcpy(q->g, b + 8, sizeof q->g); q->sel = b[62]; q->parts = b[63]; q->phys = b[64];
+    if (v10) q->rsv = b[65];
     if (v7 && (q->g[G_RTYPE] < 0 || q->g[G_RTYPE] > 1))   /* a FUN7 may still hold the old drum channel there */
         proj_rtype_room(q->g);
     for (t = 0; t < NTRK; t++) {
@@ -1412,7 +1413,12 @@ static void autosave_poll(void)
         return;
     as.last = fm1_ms;
     as.wrote = 1;
+#define NOICE_AUTOSAVE_TAG 0x4Eu
     project_capture(&proj_scratch);
+#if NOICE_PROBE
+    proj_scratch.rsv = NOICE_AUTOSAVE_TAG;
+    proj_scratch.sum = proj_sum(&proj_scratch);
+#endif
     proj_wire_gen++;
     as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0;
     if (!as.err) {
@@ -1433,7 +1439,11 @@ static int autosave_boot(int allowed)
         int n;
         proj_wire_gen++;
         n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
-        if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
+        if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)
+#if NOICE_PROBE
+            && proj_scratch.rsv == NOICE_AUTOSAVE_TAG
+#endif
+        ) {
             proj_bound(&proj_scratch);
             if (!project_restore_runtime(&proj_scratch)) {
                 ui_message("RESTORED");
