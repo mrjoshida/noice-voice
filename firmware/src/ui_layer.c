@@ -59,11 +59,11 @@ typedef struct {
 } layer_t;
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
-    {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}}},
+    {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},                                                        /* LAYER_FX retired */
+    {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},                                                        /* LAYER_GLO retired */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] VOWELS", {{KC_KEYS, "VOWELS"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
-    {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] TOOLS", {{KC_KEYS, "TOOLS"}, {KC_OCTDN, "UNDO"}, {KC_SEQ, "DONE"}}},
+    {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},                                                        /* LAYER_EDIT retired */
+    {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},                                                        /* LAYER_SEQ retired */
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
@@ -154,9 +154,9 @@ static void layer_arm(uint32_t pressed, uint32_t now)
     if (ui.ly)
         return;
     for (l = LAYER_FX; l < LAYER_N; l++)
-        if (pressed & ly_bit(l)) {
-            if (l != LAYER_SCL)
-                return; /* NOICE VOICE: only VOWEL SCL layer */
+        if (LAYERS[l].btn && (pressed & ly_bit(l))) {
+            if (l != LAYER_SCL && l != LAYER_REC)
+                return;
             ui.ly = (uint8_t)l;
             ui.ly_t0 = (now & ~15u) | 1u | (layer_allowed() ? 0u : LY_DEAD);
             lys.dtap = lys.dt_l == l && fm1_ms - lys.dt_ms <= LY_DTAP_MS;   /* (#83: the second tap of a double tap?) */

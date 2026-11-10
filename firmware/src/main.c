@@ -67,6 +67,88 @@ static void felucca_init(void)
         track_defaults_steps(t);              /* (a sound load never touches them) */
         if (TRK_DEF[i][2])
             load_pat16(t, PATTERNS[TRK_DEF[i][2] - 1u].note, PATTERNS[TRK_DEF[i][2] - 1u].flags);
+        if (i == 0) {
+            /* Factory speech sentence: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW" */
+            /* Word 1: NOICE (Step 0) - Nasal /n/ into diphthong /oi/ */
+            motion_set_lock(t, 0, P_E0, 80);
+            motion_set_lock(t, 0, P_E1, 100);
+            motion_set_lock(t, 0, P_E2, 30);
+            motion_set_lock(t, 0, P_E3, 115);
+            motion_set_lock(t, 0, P_END_TONGUE, 25);
+            motion_set_lock(t, 0, P_END_JAW, 85);
+            motion_set_lock(t, 0, P_END_LIPS, 80);
+            motion_set_lock(t, 0, P_END_VELUM, 0);
+
+            /* Word 2: VOICE (Step 2) - Labiodental /v/ into /oi/ */
+            motion_set_lock(t, 2, P_E0, 35);
+            motion_set_lock(t, 2, P_E1, 95);
+            motion_set_lock(t, 2, P_E2, 10);
+            motion_set_lock(t, 2, P_E3, 0);
+            motion_set_lock(t, 2, P_END_TONGUE, 25);
+            motion_set_lock(t, 2, P_END_JAW, 80);
+            motion_set_lock(t, 2, P_END_LIPS, 80);
+            motion_set_lock(t, 2, P_END_VELUM, 0);
+
+            /* Word 3: CAN (Step 4) - Velar /k/ into /ae/ + /n/ */
+            motion_set_lock(t, 4, P_E0, 110);
+            motion_set_lock(t, 4, P_E1, 80);
+            motion_set_lock(t, 4, P_E2, 55);
+            motion_set_lock(t, 4, P_E3, 0);
+            motion_set_lock(t, 4, P_END_TONGUE, 75);
+            motion_set_lock(t, 4, P_END_JAW, 35);
+            motion_set_lock(t, 4, P_END_LIPS, 70);
+            motion_set_lock(t, 4, P_END_VELUM, 100);
+
+            /* Word 4: SPEAK (Step 6) - Sibilant /s/ into /i/ + /k/ */
+            motion_set_lock(t, 6, P_E0, 70);
+            motion_set_lock(t, 6, P_E1, 95);
+            motion_set_lock(t, 6, P_E2, 60);
+            motion_set_lock(t, 6, P_E3, 0);
+            motion_set_lock(t, 6, P_END_TONGUE, 20);
+            motion_set_lock(t, 6, P_END_JAW, 90);
+            motion_set_lock(t, 6, P_END_LIPS, 90);
+            motion_set_lock(t, 6, P_END_VELUM, 0);
+
+            /* Word 5: WORDS (Step 8) - Labial /w/ into /er/ */
+            motion_set_lock(t, 8, P_E0, 35);
+            motion_set_lock(t, 8, P_E1, 75);
+            motion_set_lock(t, 8, P_E2, 15);
+            motion_set_lock(t, 8, P_E3, 0);
+            motion_set_lock(t, 8, P_END_TONGUE, 60);
+            motion_set_lock(t, 8, P_END_JAW, 55);
+            motion_set_lock(t, 8, P_END_LIPS, 45);
+            motion_set_lock(t, 8, P_END_VELUM, 0);
+
+            /* Word 6: TO (Step 10) - Lingual /t/ into /u/ */
+            motion_set_lock(t, 10, P_E0, 90);
+            motion_set_lock(t, 10, P_E1, 95);
+            motion_set_lock(t, 10, P_E2, 50);
+            motion_set_lock(t, 10, P_E3, 0);
+            motion_set_lock(t, 10, P_END_TONGUE, 35);
+            motion_set_lock(t, 10, P_END_JAW, 85);
+            motion_set_lock(t, 10, P_END_LIPS, 20);
+            motion_set_lock(t, 10, P_END_VELUM, 0);
+
+            /* Word 7: YOU (Step 12) - Palatal /j/ into /u/ */
+            motion_set_lock(t, 12, P_E0, 20);
+            motion_set_lock(t, 12, P_E1, 85);
+            motion_set_lock(t, 12, P_E2, 75);
+            motion_set_lock(t, 12, P_E3, 0);
+            motion_set_lock(t, 12, P_END_TONGUE, 35);
+            motion_set_lock(t, 12, P_END_JAW, 80);
+            motion_set_lock(t, 12, P_END_LIPS, 18);
+            motion_set_lock(t, 12, P_END_VELUM, 0);
+
+            /* Word 8: NOW (Step 14) - Nasal /n/ into /au/ */
+            motion_set_lock(t, 14, P_E0, 80);
+            motion_set_lock(t, 14, P_E1, 95);
+            motion_set_lock(t, 14, P_E2, 40);
+            motion_set_lock(t, 14, P_E3, 115);
+            motion_set_lock(t, 14, P_END_TONGUE, 45);
+            motion_set_lock(t, 14, P_END_JAW, 30);
+            motion_set_lock(t, 14, P_END_LIPS, 25);
+            motion_set_lock(t, 14, P_END_VELUM, 0);
+        }
         pat_sig[i] = steps_sig(t);            /* a default pattern, not the user's */
         pat_last[i] = TRK_DEF[i][2];
     }

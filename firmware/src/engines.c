@@ -189,7 +189,9 @@ static const struct {
     const char *name;
     uint8_t note[16], flags[16];
 } PATTERNS[] = {
-    {"ACID", {45, 45, 57, 45, 0, 48, 45, 55, 45, 0, 57, 52, 45, 48, 0, 50},          /* 1 */
+    {"SENTENCE", {57, 0, 59, 0, 60, 0, 62, 0, 60, 0, 59, 0, 57, 0, 55, 0},          /* 1: NOICE VOICE CAN SPEAK WORDS TO YOU NOW */
+     {1, T_, 1, T_, 1, T_, 1, T_, 1, T_, 1, T_, 1, T_, 1, T_}},
+    {"ACID", {45, 45, 57, 45, 0, 48, 45, 55, 45, 0, 57, 52, 45, 48, 0, 50},          /* 2 */
      {1, 0, 2, 0, 0, 0, 1, 2, 0, 0, 1, 0, 0, 2, 0, 1}},
     {"OFFBEAT", {0, 36, 0, 36, 0, 36, 0, 48, 0, 36, 0, 36, 0, 39, 0, 43},          /* 2 bass */
      {0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0}},
@@ -225,7 +227,7 @@ static const struct {
 
 /* the parts at power-on (engine, preset, PATTERNS[n - 1] in the sequencer, 0 = empty: all are): bass, pad, lead, drums */
 #if NOICE_PROBE                     /* NOICE VOICE: 4 parts default to HUMAN, TROLL, ELF, BEAST */
-static const uint8_t TRK_DEF[NPART][3] = {{5, 0, 0}, {6, 0, 0}, {7, 0, 0}, {8, 0, 0}};
+static const uint8_t TRK_DEF[NPART][3] = {{5, 0, 1}, {6, 0, 0}, {7, 0, 0}, {8, 0, 0}};
 #else
 static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}}; /* ANALOG ACID,
                                                                        * FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT */

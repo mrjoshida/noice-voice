@@ -471,6 +471,7 @@ typedef struct {
 static const page_t PAGES[] = {
     /* EDIT */
     {"MOUTH",     FAM_EDIT, SC_ENGINE, GR_NONE,   {P_E0, P_E1, P_E2, P_E3}},
+    {"END MOUTH", FAM_EDIT, SC_TRACK,  GR_NONE,   {P_END_TONGUE, P_END_JAW, P_END_LIPS, P_END_VELUM}},
     {"GLOTTIS",   FAM_EDIT, SC_TRACK,  GR_NONE,   {P_E4, P_E7, P_ATSNS, P_VOICE}},
     /* ENV */
     {"ENV TIME",  FAM_ENV,  SC_TRACK,  GR_NONE,   {P_ED_FLT, P_ED_PIT, P_ED_SHP, P_ED_FX}},
@@ -483,6 +484,8 @@ static const page_t PAGES[] = {
     {"VIBRATO",   FAM_LFO,  SC_TRACK,  GR_NONE,   {P_LD_PIT, P_LRATE, P_LFADE, P_GLIDE}},
     /* SCL */
     {"SCALE",     FAM_SCL,  SC_TRACK,  GR_SCALE,  {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
+    /* SEQ */
+    {"STEP",      FAM_SEQ,  SC_STEP,   GR_ROLL,   {0, 1, 2, 3}},
     /* SAVE */
     {"PRESETS",   FAM_SAVE, SC_GLOBAL, GR_BROWSE, {0xFF, 0xFF, 0xFF, 0xFF}},
     {"USER",      FAM_SAVE, SC_GLOBAL, GR_USER,   {0xFF, 0xFF, 0xFF, 0xFF}},

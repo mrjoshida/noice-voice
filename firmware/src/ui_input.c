@@ -446,13 +446,6 @@ static void ui_leds(void)
     }
     for (k = 0; k < NB; k++)
         led_put(nd, panel.btn[k], 1);
-    {
-        tract_t *tr = tr_of(TSEL);
-        if (tr->artic.hold_on)
-            led_put(nl, panel.btn[B_PLAY], 1);
-        if (tr->artic.whisper_on)
-            led_put(nl, panel.btn[B_SEQ], 1);
-    }
     if (song.playing || seq_counting())                 /* playing: PLAY's green, its own LED dark in every mode */
         led_clear(nd, panel.btn[B_PLAY]);
     for (c = 0; c < FM1_NCOL; c++) {
@@ -1551,10 +1544,6 @@ static void ui_input(void)
         pressed &= ~(1u << panel.btn[B_OCTUP]);
         ui_message("KEPT");
     }
-    {
-        tract_t *tr = tr_of(TSEL);
-        tr->artic.whisper_on = ((fm1_in.buttons >> panel.btn[B_SEQ]) & 1u);
-    }
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
@@ -1733,12 +1722,12 @@ static void ui_input(void)
             continue;
         b = panel_btn_of(id);
         switch (b) {
-        case B_PLAY: {
-            tract_t *tr = tr_of(TSEL);
-            tr->artic.hold_on = !tr->artic.hold_on;
-            ui_message(tr->artic.hold_on ? "HOLD ON" : "HOLD OFF");
+        case B_PLAY:
+            if (song.playing || chain_busy() || seq_counting())
+                transport_req = 2;
+            else
+                transport_req = 1;
             break;
-        }
         case B_ARP: {
             if (ui.home) {
                 tract_t *tr = tr_of(TSEL);
@@ -1750,13 +1739,8 @@ static void ui_input(void)
             }
             break;
         }
-        case B_SEQ:
-        case B_REC:                                     /* tap: above; held, its layer (ui_layer.c) */
+        case B_REC:
         case B_SAVE:
-        case B_FX:                                      /* the layers' buttons: ui_layer.c */
-        case B_GLO:
-        case B_SCL:
-        case B_EDIT:
         case B_HOME:
             break;
         case B_OCTDN:

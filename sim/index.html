@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOICE VOICE - FM-1 Hardware Simulator</title>
+<style>
+  :root {
+    --bg-chassis: #121417;
+    --bezel: #1a1d24;
+    --faceplate: #1e222b;
+    --screen-bg: #090d12;
+    --screen-text: #e2e8f0;
+    --screen-dim: #64748b;
+    --screen-accent: #38bdf8;
+    --screen-pink: #f472b6;
+    --screen-gold: #fbbf24;
+    --screen-green: #34d399;
+    --screen-red: #f87171;
+    --key-white: #f8fafc;
+    --key-black: #0f172a;
+    --knob-cap: #242933;
+    --knob-rim: #3b4252;
+    --btn-bg: #2d3748;
+    --btn-active: #4a5568;
+    --btn-lit: #38bdf8;
+  }
+  * { box-sizing: border-box; user-select: none; }
+  body {
+    margin: 0;
+    padding: 20px;
+    background: #0b0c10;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+  .chassis {
+    width: 900px;
+    background: linear-gradient(180deg, #282c37 0%, #1a1d24 100%);
+    border-radius: 16px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1), inset 0 0 2px rgba(255,255,255,0.05);
+    padding: 24px;
+    position: relative;
+    border: 1px solid #333a48;
+  }
+  .header-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  .brand {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 3px;
+    color: #f1f5f9;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand span {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    color: var(--screen-accent);
+    background: rgba(56, 189, 248, 0.15);
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+  }
+  .creature-bar {
+    display: flex;
+    gap: 6px;
+  }
+  .c-pill {
+    padding: 5px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: #252b36;
+    color: #94a3b8;
+    cursor: pointer;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.15s;
+  }
+  .c-pill:hover { color: #fff; background: #333b4a; }
+  .c-pill.active {
+    background: #0284c7;
+    color: #fff;
+    box-shadow: 0 0 12px rgba(2, 132, 199, 0.5);
+    border-color: #38bdf8;
+  }
+  .top-section {
+    display: grid;
+    grid-template-columns: 240px 1fr 140px;
+    gap: 24px;
+    margin-bottom: 24px;
+  }
+  .screen-well {
+    width: 240px;
+    height: 240px;
+    background: var(--screen-bg);
+    border-radius: 8px;
+    box-shadow: inset 0 4px 12px rgba(0,0,0,0.9), 0 0 0 4px #15181e;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  #lcd {
+    width: 240px;
+    height: 240px;
+    display: block;
+    image-rendering: pixelated;
+  }
+  .knobs-panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .knobs-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+  }
+  .knob-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  .knob-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: #cbd5e1;
+    text-transform: uppercase;
+  }
+  .knob-sub {
+    font-size: 10px;
+    color: #64748b;
+    font-family: monospace;
+  }
+  .knob-dial {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #3d4452, #1f232b);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5), inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -2px 4px rgba(0,0,0,0.6);
+    position: relative;
+    cursor: grab;
+    border: 2px solid #2a303c;
+  }
+  .knob-dial:active { cursor: grabbing; }
+  .knob-dial .knob-pointer {
+    position: absolute;
+    top: 6px;
+    left: 27px;
+    width: 4px;
+    height: 14px;
+    background: #38bdf8;
+    border-radius: 2px;
+    transform-origin: 2px 23px;
+    box-shadow: 0 0 4px #38bdf8;
+  }
+  .page-nav-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .btn {
+    padding: 8px 12px;
+    background: #252b37;
+    border: 1px solid #3a4252;
+    border-radius: 6px;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.1s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  }
+  .btn:hover { background: #323a4b; color: #fff; }
+  .btn:active, .btn.pressed { transform: translateY(1px); background: #1c222c; }
+  .btn.active {
+    border-color: var(--screen-accent);
+    color: var(--screen-accent);
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+  .transport-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: rgba(0,0,0,0.2);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .transport-btn {
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .t-play {
+    background: #1e3a2f;
+    color: #4ade80;
+    border: 1px solid #166534;
+  }
+  .t-play.playing {
+    background: #15803d;
+    color: #fff;
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.7);
+  }
+  .t-arp {
+    background: #3b2847;
+    color: #e879f9;
+    border: 1px solid #86198f;
+  }
+  .t-arp:active { background: #a21caf; color: #fff; }
+  .keys-deck {
+    margin-top: 10px;
+    background: #14171f;
+    padding: 16px 12px 12px 12px;
+    border-radius: 12px;
+    border: 1px solid #232834;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+  .keyboard {
+    position: relative;
+    height: 120px;
+    display: flex;
+    justify-content: center;
+  }
+  .white-keys {
+    display: flex;
+    gap: 3px;
+    width: 100%;
+  }
+  .key-white {
+    flex: 1;
+    height: 120px;
+    background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+    border-radius: 0 0 5px 5px;
+    cursor: pointer;
+    box-shadow: 0 3px 5px rgba(0,0,0,0.4), inset 0 -2px 0 #94a3b8;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    padding-bottom: 6px;
+    color: #475569;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .key-white:active, .key-white.active {
+    background: linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 100%);
+    transform: translateY(2px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    color: #0284c7;
+  }
+  .black-keys {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 75px;
+    display: flex;
+    pointer-events: none;
+  }
+  .key-black {
+    position: absolute;
+    width: 5.2%;
+    height: 75px;
+    background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 0 0 4px 4px;
+    cursor: pointer;
+    pointer-events: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.1);
+    border: 1px solid #334155;
+    border-top: none;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding-bottom: 4px;
+    color: #94a3b8;
+    font-size: 9px;
+  }
+  .key-black:active, .key-black.active {
+    background: #0284c7;
+    transform: translateY(2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    color: #fff;
+  }
+  .step-led {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #334155;
+    margin-bottom: 4px;
+    transition: all 0.1s;
+  }
+  .step-led.lit {
+    background: #38bdf8;
+    box-shadow: 0 0 8px #38bdf8;
+  }
+  .step-led.current {
+    background: #4ade80;
+    box-shadow: 0 0 10px #4ade80;
+  }
+  .footer-status {
+    margin-top: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: #64748b;
+  }
+  .sentence-badge {
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    font-family: monospace;
+    font-size: 11px;
+  }
+</style>
+</head>
+<body>
+
+<div class="chassis">
+  <div class="header-bar">
+    <div class="brand">
+      NOICE VOICE
+      <span>PHYSICAL WAVEGUIDE VOCAL SYNTH</span>
+    </div>
+    <div class="creature-bar">
+      <div class="c-pill active" data-creature="0">HUMAN</div>
+      <div class="c-pill" data-creature="1">TROLL</div>
+      <div class="c-pill" data-creature="2">ELF</div>
+      <div class="c-pill" data-creature="3">BEAST</div>
+    </div>
+  </div>
+
+  <div class="top-section">
+    <!-- 240x240 LCD DISPLAY -->
+    <div class="screen-well">
+      <canvas id="lcd" width="240" height="240"></canvas>
+    </div>
+
+    <!-- 4 PARAMETER KNOBS & PAGE CYCLING -->
+    <div class="knobs-panel">
+      <div class="knobs-grid">
+        <div class="knob-unit">
+          <div class="knob-label" id="lbl-k1">TONGUE</div>
+          <div class="knob-dial" id="dial-k1" data-knob="0">
+            <div class="knob-pointer" id="ptr-k1"></div>
+          </div>
+          <div class="knob-sub" id="val-k1">64%</div>
+        </div>
+
+        <div class="knob-unit">
+          <div class="knob-label" id="lbl-k2">JAW</div>
+          <div class="knob-dial" id="dial-k2" data-knob="1">
+            <div class="knob-pointer" id="ptr-k2"></div>
+          </div>
+          <div class="knob-sub" id="val-k2">64%</div>
+        </div>
+
+        <div class="knob-unit">
+          <div class="knob-label" id="lbl-k3">LIPS</div>
+          <div class="knob-dial" id="dial-k3" data-knob="2">
+            <div class="knob-pointer" id="ptr-k3"></div>
+          </div>
+          <div class="knob-sub" id="val-k3">64%</div>
+        </div>
+
+        <div class="knob-unit">
+          <div class="knob-label" id="lbl-k4">VELUM</div>
+          <div class="knob-dial" id="dial-k4" data-knob="3">
+            <div class="knob-pointer" id="ptr-k4"></div>
+          </div>
+          <div class="knob-sub" id="val-k4">0%</div>
+        </div>
+      </div>
+
+      <div class="page-nav-row">
+        <button class="btn active" id="btn-home">HOME</button>
+        <button class="btn" id="btn-edit">EDIT [1/3]</button>
+        <button class="btn" id="btn-env">ENV [1/3]</button>
+        <button class="btn" id="btn-fx">FX [1/2]</button>
+        <button class="btn" id="btn-seq">SEQ [STEP]</button>
+        <button class="btn" id="btn-scl">SCALE</button>
+        <button class="btn" id="btn-lfo">VIBRATO</button>
+        <button class="btn" id="btn-save">PRESETS</button>
+      </div>
+    </div>
+
+    <!-- TRANSPORT PANEL -->
+    <div class="transport-panel">
+      <button class="transport-btn t-play" id="btn-play">
+        <span id="play-icon">▶</span> PLAY
+      </button>
+      <button class="transport-btn t-arp" id="btn-arp">
+        💬 RE-SPEAK
+      </button>
+      <div style="display: flex; gap: 6px; margin-top: auto;">
+        <button class="btn" id="btn-octdn" style="flex: 1;">OCT -</button>
+        <button class="btn" id="btn-octup" style="flex: 1;">OCT +</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16 PIANO KEYS / STEPS -->
+  <div class="keys-deck">
+    <div class="keyboard">
+      <div class="white-keys" id="white-keys">
+        <!-- 16 white keys rendered by script -->
+      </div>
+      <div class="black-keys" id="black-keys">
+        <!-- Black keys rendered by script -->
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-status">
+    <div>SPEECH SENTENCE: <span class="sentence-badge" id="sentence-word">"NOICE VOICE CAN SPEAK WORDS TO YOU NOW"</span></div>
+    <div>ACTIVE STEP: <span id="active-step-num">1</span>/16 | TEMPO: 110 BPM | CPU: ~14%</div>
+  </div>
+</div>
+
+<script>
+// --- NOICE VOICE DSP & SIMULATOR LOGIC ---
+const canvas = document.getElementById('lcd');
+const ctx = canvas.getContext('2d');
+
+// Engine State
+const state = {
+  creature: 0, // 0: HUMAN, 1: TROLL, 2: ELF, 3: BEAST
+  pageFam: 'HOME', // HOME, EDIT, ENV, FX, SEQ, SCL, LFO, SAVE
+  pageIndex: 0,
+  octave: 0,
+  playing: false,
+  seqStep: 0,
+  bpm: 110,
+  // Live Articulator Values (0..127)
+  p: {
+    // MOUTH (Start)
+    tongue: 64, jaw: 64, lips: 64, velum: 0,
+    // END MOUTH (Target)
+    end_tongue: 64, end_jaw: 64, end_lips: 64, end_velum: 0,
+    // GLOTTIS
+    body: 20, choir: 32, touch: 64, voicing: 0,
+    // ENV TIME
+    speed: 55, hold: 15, ret: 20, mode: 0, // 0: GLIDE, 1: RETURN, 2: BOUNCE, 3: TOUCH
+    // BREATH
+    atk: 10, rel: 40, tension: 70, breath: 15,
+    // RESONANCE
+    wall_q: 64, tract_len: 64, trachea: 40, nasal_q: 50,
+    // SPACE
+    growl: 0, chorus: 25, delay: 0, reverb: 35
+  },
+  // Animated morph state
+  morph: {
+    phase: 0.0, // 0.0 to 1.0
+    active: false,
+    curTongue: 64,
+    curJaw: 64,
+    curLips: 64,
+    curVelum: 0,
+    mouthAcousticPulse: 0
+  },
+  // Note state
+  noteActive: false,
+  currentFreq: 130.81, // C3
+  wordBanner: 'NOICE'
+};
+
+// Sentence Sequence: "NOICE VOICE CAN SPEAK WORDS TO YOU NOW"
+const SENTENCE = [
+  { word: "NOI-", note: 57, tng: 80, jaw: 100, lip: 30, vel: 115, e_tng: 25, e_jaw: 85, e_lip: 80, e_vel: 0 },
+  { word: "-CE",  note: 57, tie: true },
+  { word: "VOI-", note: 59, tng: 35, jaw: 95,  lip: 10, vel: 0,   e_tng: 25, e_jaw: 80, e_lip: 80, e_vel: 0 },
+  { word: "-CE",  note: 59, tie: true },
+  { word: "CAN",  note: 60, tng: 110, jaw: 80, lip: 55, vel: 0,   e_tng: 75, e_jaw: 35, e_lip: 70, e_vel: 100 },
+  { word: "CAN",  note: 60, tie: true },
+  { word: "SPEAK",note: 62, tng: 70, jaw: 95,  lip: 60, vel: 0,   e_tng: 20, e_jaw: 90, e_lip: 90, e_vel: 0 },
+  { word: "SPEAK",note: 62, tie: true },
+  { word: "WORDS",note: 60, tng: 35, jaw: 75,  lip: 15, vel: 0,   e_tng: 60, e_jaw: 55, e_lip: 45, e_vel: 0 },
+  { word: "WORDS",note: 60, tie: true },
+  { word: "TO",   note: 59, tng: 90, jaw: 95,  lip: 50, vel: 0,   e_tng: 35, e_jaw: 85, e_lip: 20, e_vel: 0 },
+  { word: "TO",   note: 59, tie: true },
+  { word: "YOU",  note: 57, tng: 20, jaw: 85,  lip: 75, vel: 0,   e_tng: 35, e_jaw: 80, e_lip: 18, e_vel: 0 },
+  { word: "YOU",  note: 57, tie: true },
+  { word: "NOW",  note: 55, tng: 80, jaw: 95,  lip: 40, vel: 115, e_tng: 45, e_jaw: 30, e_lip: 25, e_vel: 0 },
+  { word: "NOW",  note: 55, tie: true }
+];
+
+// Page Map
+const PAGES = {
+  HOME: [{ title: 'HOME', k: ['TONGUE', 'JAW', 'LIPS', 'VELUM'], ids: ['tongue', 'jaw', 'lips', 'velum'] }],
+  EDIT: [
+    { title: 'MOUTH [1/3]', k: ['TONGUE', 'JAW', 'LIPS', 'VELUM'], ids: ['tongue', 'jaw', 'lips', 'velum'] },
+    { title: 'END MOUTH [2/3]', k: ['END TNG', 'END JAW', 'END LIP', 'END VEL'], ids: ['end_tongue', 'end_jaw', 'end_lips', 'end_velum'] },
+    { title: 'GLOTTIS [3/3]', k: ['BODY', 'CHOIR', 'TOUCH', 'VOICING'], ids: ['body', 'choir', 'touch', 'voicing'] }
+  ],
+  ENV: [
+    { title: 'ENV TIME [1/3]', k: ['SPEED', 'HOLD', 'RETURN', 'MODE'], ids: ['speed', 'hold', 'ret', 'mode'] },
+    { title: 'END SHAPE [2/3]', k: ['END TNG', 'END JAW', 'END LIP', 'END VEL'], ids: ['end_tongue', 'end_jaw', 'end_lips', 'end_velum'] },
+    { title: 'BREATH [3/3]', k: ['ATTACK', 'RELEASE', 'TENSION', 'BREATH'], ids: ['atk', 'rel', 'tension', 'breath'] }
+  ],
+  FX: [
+    { title: 'RESONANCE [1/2]', k: ['WALL Q', 'TRACT LEN', 'TRACHEA', 'NASAL Q'], ids: ['wall_q', 'tract_len', 'trachea', 'nasal_q'] },
+    { title: 'SPACE [2/2]', k: ['GROWL', 'CHORUS', 'DELAY', 'REVERB'], ids: ['growl', 'chorus', 'delay', 'reverb'] }
+  ],
+  SEQ: [{ title: 'STEP [1/1]', k: ['LEN', 'DIV', 'SWING', 'GATE'], ids: ['speed', 'hold', 'ret', 'mode'] }],
+  SCL: [{ title: 'SCALE [1/1]', k: ['ROOT', 'SCALE', 'QUANT', 'TRANS'], ids: ['tongue', 'jaw', 'lips', 'velum'] }],
+  LFO: [{ title: 'VIBRATO [1/1]', k: ['DEPTH', 'RATE', 'FADE', 'GLIDE'], ids: ['speed', 'hold', 'ret', 'mode'] }],
+  SAVE: [{ title: 'PRESETS [1/1]', k: ['PRESET', 'BANK', 'FAV', 'STORE'], ids: ['tongue', 'jaw', 'lips', 'velum'] }]
+};
+
+// --- WEBAUDIO ACOUSTIC WAVEGUIDE DSP ---
+let audioCtx = null;
+let scriptNode = null;
+let glottalPhase = 0;
+let waveguideL = new Float32Array(44);
+let waveguideR = new Float32Array(44);
+let nasalL = new Float32Array(16);
+let nasalR = new Float32Array(16);
+let radFilter = 0;
+
+function initAudio() {
+  if (audioCtx) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new AudioContext({ sampleRate: 44100 });
+  
+  const bufferSize = 512;
+  scriptNode = audioCtx.createScriptProcessor(bufferSize, 0, 1);
+  scriptNode.onaudioprocess = processAudio;
+  scriptNode.connect(audioCtx.destination);
+}
+
+function processAudio(e) {
+  const out = e.outputBuffer.getChannelData(0);
+  const n = out.length;
+  const sr = audioCtx.sampleRate;
+  
+  // Physics parameters from UI state
+  const isSounding = state.noteActive || state.p.voicing > 64;
+  const f0 = state.currentFreq;
+  const dt = f0 / sr;
+  const tractScale = 0.8 + (state.p.tract_len / 127) * 0.4;
+  const wallLoss = 0.985 - (state.p.wall_q / 127) * 0.015;
+  const velumOpen = state.morph.curVelum / 127;
+  const lipOpen = state.morph.curLips / 127;
+  const growlAmt = state.p.growl / 127;
+
+  for (let i = 0; i < n; i++) {
+    let excitation = 0;
+    if (isSounding) {
+      glottalPhase += dt;
+      if (glottalPhase >= 1.0) glottalPhase -= 1.0;
+      
+      // Rosenberg glottal flow model
+      if (glottalPhase < 0.4) {
+        excitation = 0.5 * (1 - Math.cos(Math.PI * glottalPhase / 0.4));
+      } else if (glottalPhase < 0.6) {
+        excitation = Math.cos(Math.PI * (glottalPhase - 0.4) / 0.4);
+      } else {
+        excitation = 0;
+      }
+      
+      // Breath noise turbulence
+      const noise = (Math.random() * 2 - 1) * (state.p.breath / 127) * 0.25;
+      excitation += noise;
+
+      // Tracheal chest pulse
+      const trachPulse = Math.sin(glottalPhase * Math.PI * 4) * (state.p.trachea / 127) * 0.15;
+      excitation += trachPulse;
+    }
+
+    // Kelly-Lochbaum Waveguide Simulation
+    let waveIn = excitation;
+    waveguideR[0] = waveIn + waveguideL[0] * -0.9;
+
+    for (let j = 0; j < 43; j++) {
+      let r = 0.05;
+      if (j === 20) { // Tongue hump constriction
+        const tPos = state.morph.curTongue / 127;
+        r = (tPos - 0.5) * 0.6;
+      } else if (j === 42) { // Lip aperture
+        r = 0.8 - lipOpen * 0.7;
+      }
+      
+      const fwd = waveguideR[j];
+      const rev = waveguideL[j + 1];
+      waveguideR[j + 1] = (fwd * (1 - r) + rev * r) * wallLoss;
+      waveguideL[j] = (rev * (1 + r) - fwd * r) * wallLoss;
+    }
+
+    // Nasal branch reflection
+    if (velumOpen > 0.05) {
+      const vR = velumOpen * 0.4;
+      nasalR[0] = waveguideR[17] * vR;
+      waveguideL[17] += nasalL[0] * vR;
+      for (let nj = 0; nj < 15; nj++) {
+        nasalR[nj + 1] = nasalR[nj] * 0.97;
+        nasalL[nj] = nasalL[nj + 1] * 0.97;
+      }
+    }
+
+    // Radiation at lips (high-pass difference)
+    const mouthRad = waveguideR[43];
+    let sample = mouthRad - radFilter;
+    radFilter = mouthRad * 0.95;
+
+    // Growl Overdrive Distortion
+    if (growlAmt > 0) {
+      sample = Math.tanh(sample * (1 + growlAmt * 4));
+    }
+
+    out[i] = sample * 0.4;
+    state.morph.mouthAcousticPulse = Math.abs(sample);
+  }
+}
+
+// --- SEQUENCER TRANSPORT ---
+let seqTimer = null;
+function togglePlay() {
+  initAudio();
+  state.playing = !state.playing;
+  const playBtn = document.getElementById('btn-play');
+  const playIcon = document.getElementById('play-icon');
+  
+  if (state.playing) {
+    playBtn.classList.add('playing');
+    playIcon.textContent = '■';
+    startSequencer();
+  } else {
+    playBtn.classList.remove('playing');
+    playIcon.textContent = '▶';
+    stopSequencer();
+  }
+}
+
+function startSequencer() {
+  const stepMs = (60000 / state.bpm) / 4; // 16th notes
+  seqTimer = setInterval(() => {
+    stepSequencer();
+  }, stepMs);
+}
+
+function stopSequencer() {
+  if (seqTimer) clearInterval(seqTimer);
+  state.noteActive = false;
+  updateKeyHighlights();
+}
+
+function stepSequencer() {
+  state.seqStep = (state.seqStep + 1) % 16;
+  document.getElementById('active-step-num').textContent = state.seqStep + 1;
+  
+  const stepData = SENTENCE[state.seqStep];
+  if (stepData) {
+    if (!stepData.tie) {
+      // Trigger new word syllable
+      triggerSyllable(stepData);
+    }
+  }
+  updateKeyHighlights();
+}
+
+function triggerSyllable(d) {
+  state.wordBanner = d.word;
+  document.getElementById('sentence-word').textContent = `"${d.word}"`;
+  
+  // Set note frequency
+  const midi = d.note + (state.octave * 12);
+  state.currentFreq = 440 * Math.pow(2, (midi - 69) / 12);
+  state.noteActive = true;
+
+  // Set Start Shape
+  state.p.tongue = d.tng;
+  state.p.jaw = d.jaw;
+  state.p.lips = d.lip;
+  state.p.velum = d.vel;
+
+  // Set End Shape
+  state.p.end_tongue = d.e_tng;
+  state.p.end_jaw = d.e_jaw;
+  state.p.end_lips = d.e_lip;
+  state.p.end_velum = d.e_vel;
+
+  // Start Articulatory Morph
+  state.morph.phase = 0.0;
+  state.morph.active = true;
+  updateKnobDisplays();
+}
+
+function triggerReSpeak() {
+  initAudio();
+  state.noteActive = true;
+  state.morph.phase = 0.0;
+  state.morph.active = true;
+  setTimeout(() => {
+    if (!state.playing) state.noteActive = false;
+  }, 400);
+}
+
+// --- 240x240 LCD VECTOR DRAWING ROUTINE ---
+function drawLCD() {
+  ctx.fillStyle = '#090d12';
+  ctx.fillRect(0, 0, 240, 240);
+
+  // Update morph interpolation
+  if (state.morph.active) {
+    const spd = (state.p.speed / 127) * 0.06 + 0.02;
+    state.morph.phase += spd;
+    if (state.morph.phase >= 1.0) {
+      state.morph.phase = 1.0;
+      if (!state.playing) state.morph.active = false;
+    }
+  }
+
+  // Smooth interpolation from Start to End Shape
+  const ph = state.morph.phase;
+  state.morph.curTongue = state.p.tongue + (state.p.end_tongue - state.p.tongue) * ph;
+  state.morph.curJaw = state.p.jaw + (state.p.end_jaw - state.p.jaw) * ph;
+  state.morph.curLips = state.p.lips + (state.p.end_lips - state.p.lips) * ph;
+  state.morph.curVelum = state.p.velum + (state.p.end_velum - state.p.velum) * ph;
+
+  // Draw Top Banner (Creature Name & Syllable Morph)
+  const cNames = ['HUMAN', 'TROLL', 'ELF', 'BEAST'];
+  ctx.fillStyle = '#38bdf8';
+  ctx.font = 'bold 9px monospace';
+  ctx.fillText(cNames[state.creature], 8, 14);
+
+  ctx.fillStyle = '#f472b6';
+  ctx.font = 'bold 11px monospace';
+  ctx.fillText(state.wordBanner, 70, 15);
+
+  // Morph Progress Bar
+  ctx.fillStyle = '#1e293b';
+  ctx.fillRect(150, 8, 80, 8);
+  ctx.fillStyle = state.morph.active ? '#34d399' : '#475569';
+  ctx.fillRect(150, 8, 80 * ph, 8);
+  ctx.strokeStyle = '#334155';
+  ctx.strokeRect(150, 8, 80, 8);
+
+  // Mid-Sagittal Vocal Tract Geometry
+  const ox = 75, oy = 95;
+  const jawDrop = (state.morph.curJaw / 127) * 22;
+  const tngArch = (state.morph.curTongue / 127) * 28;
+  const lipExt = (state.morph.curLips / 127) * 16;
+  const velOpen = (state.morph.curVelum / 127) * 14;
+
+  // 1. Skull Base & Nasal Cavity (Bone Gray)
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(ox - 35, oy + 45); // Cervical spine
+  ctx.lineTo(ox - 35, oy - 20); // Pharyngeal wall
+  ctx.quadraticCurveTo(ox - 30, oy - 55, ox + 10, oy - 55); // Cranium top
+  ctx.lineTo(ox + 50, oy - 55); // Nasal bridge
+  ctx.lineTo(ox + 60, oy - 35); // Upper maxilla
+  ctx.stroke();
+
+  // Hard Palate & Nasal Floor
+  ctx.beginPath();
+  ctx.moveTo(ox - 5, oy - 25);
+  ctx.quadraticCurveTo(ox + 25, oy - 25, ox + 55, oy - 20);
+  ctx.stroke();
+
+  // Velum (Soft Palate Gate)
+  ctx.strokeStyle = velOpen > 2 ? '#38bdf8' : '#e2e8f0';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(ox - 5, oy - 25);
+  ctx.lineTo(ox - 18, oy - 20 + velOpen); // Swings down to open nasal airway
+  ctx.stroke();
+
+  if (velOpen > 4) {
+    // Nasal Airflow indicator
+    ctx.fillStyle = 'rgba(56, 189, 248, 0.2)';
+    ctx.beginPath();
+    ctx.arc(ox + 20, oy - 40, 8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 2. Tongue Spline (Muscular Coral)
+  ctx.strokeStyle = '#f87171';
+  ctx.fillStyle = 'rgba(248, 113, 113, 0.25)';
+  ctx.lineWidth = 3.5;
+  ctx.beginPath();
+  ctx.moveTo(ox - 25, oy + 40); // Tongue root
+  ctx.bezierCurveTo(
+    ox - 20, oy + 10 - tngArch * 0.5,
+    ox - 5 + (state.morph.curTongue - 64) * 0.3, oy - 15 - tngArch,
+    ox + 35, oy - 10 + jawDrop * 0.3 // Tongue blade
+  );
+  ctx.lineTo(ox + 45, oy - 5 + jawDrop * 0.5); // Tip
+  ctx.lineTo(ox + 30, oy + 25 + jawDrop); // Lower floor
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 3. Lower Mandible & Jaw
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(ox - 15, oy + 45);
+  ctx.lineTo(ox + 15, oy + 40 + jawDrop);
+  ctx.lineTo(ox + 50, oy + 10 + jawDrop); // Chin
+  ctx.stroke();
+
+  // 4. Pink Fleshy Lips
+  ctx.strokeStyle = '#f472b6';
+  ctx.lineWidth = 4.5;
+  ctx.lineCap = 'round';
+  // Upper Lip
+  ctx.beginPath();
+  ctx.moveTo(ox + 56, oy - 20);
+  ctx.lineTo(ox + 68 + lipExt * 0.3, oy - 18);
+  ctx.stroke();
+  // Lower Lip (drops with jaw)
+  ctx.beginPath();
+  ctx.moveTo(ox + 48, oy + 2 + jawDrop);
+  ctx.lineTo(ox + 65 + lipExt * 0.3, oy - 3 + jawDrop);
+  ctx.stroke();
+
+  // 5. Radiating Sound Waves from Mouth (when note active)
+  if (state.noteActive || state.p.voicing > 64) {
+    const p = state.morph.mouthAcousticPulse;
+    ctx.strokeStyle = `rgba(56, 189, 248, ${0.4 + p * 1.5})`;
+    ctx.lineWidth = 1.5;
+    const waveX = ox + 72 + lipExt * 0.3;
+    const waveY = oy - 10 + jawDrop * 0.4;
+    for (let w = 1; w <= 3; w++) {
+      const r = w * 12 + ((Date.now() * 0.05) % 12);
+      ctx.beginPath();
+      ctx.arc(waveX, waveY, r, -0.6, 0.6);
+      ctx.stroke();
+    }
+  }
+
+  // 6. Formant Vowel Quad Chart (Top Right Inset)
+  const qx = 180, qy = 35, qw = 50, qh = 45;
+  ctx.strokeStyle = '#334155';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(qx, qy, qw, qh);
+  ctx.fillStyle = '#475569';
+  ctx.font = '8px monospace';
+  ctx.fillText('[i]', qx + 4, qy + 12);
+  ctx.fillText('[u]', qx + qw - 16, qy + 12);
+  ctx.fillText('[a]', qx + qw / 2 - 6, qy + qh - 4);
+
+  // Crosshair tracking dot
+  const vx = qx + (state.morph.curTongue / 127) * (qw - 10) + 5;
+  const vy = qy + (state.morph.curJaw / 127) * (qh - 10) + 5;
+  ctx.fillStyle = '#38bdf8';
+  ctx.beginPath();
+  ctx.arc(vx, vy, 3.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 7. Bottom 4 Parameter Cards
+  const activePage = PAGES[state.pageFam][state.pageIndex] || PAGES.HOME[0];
+  const cy = 182, ch = 56, cw = 56;
+  for (let c = 0; c < 4; c++) {
+    const cardX = 6 + c * 58;
+    ctx.fillStyle = '#141a24';
+    ctx.fillRect(cardX, cy, cw, ch);
+    ctx.strokeStyle = '#242e3f';
+    ctx.strokeRect(cardX, cy, cw, ch);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = 'bold 8px monospace';
+    ctx.fillText(activePage.k[c], cardX + 4, cy + 12);
+
+    const val = state.p[activePage.ids[c]];
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText(val + (activePage.ids[c].includes('mode') ? '' : '%'), cardX + 8, cy + 32);
+
+    // Value mini gauge arc
+    ctx.strokeStyle = '#38bdf8';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cardX + 28, cy + 45, 7, Math.PI * 0.8, Math.PI * 0.8 + (val / 127) * Math.PI * 1.4);
+    ctx.stroke();
+  }
+
+  requestAnimationFrame(drawLCD);
+}
+
+// --- CONTROLS & KNOBS INTERACTIONS ---
+function updateKnobDisplays() {
+  const activePage = PAGES[state.pageFam][state.pageIndex] || PAGES.HOME[0];
+  for (let c = 0; c < 4; c++) {
+    const lbl = document.getElementById(`lbl-k${c+1}`);
+    const sub = document.getElementById(`val-k${c+1}`);
+    const ptr = document.getElementById(`ptr-k${c+1}`);
+    const id = activePage.ids[c];
+    const val = state.p[id];
+    
+    lbl.textContent = activePage.k[c];
+    sub.textContent = val + '%';
+    const deg = -135 + (val / 127) * 270;
+    ptr.style.transform = `rotate(${deg}deg)`;
+  }
+}
+
+// Knob Drag Interaction
+document.querySelectorAll('.knob-dial').forEach(dial => {
+  let startY, startVal;
+  dial.addEventListener('mousedown', (e) => {
+    const knobIdx = parseInt(dial.dataset.knob);
+    const activePage = PAGES[state.pageFam][state.pageIndex] || PAGES.HOME[0];
+    const paramId = activePage.ids[knobIdx];
+    startY = e.clientY;
+    startVal = state.p[paramId];
+
+    function onMove(me) {
+      const dy = startY - me.clientY;
+      const newVal = Math.max(0, Math.min(127, Math.round(startVal + dy * 0.8)));
+      state.p[paramId] = newVal;
+      updateKnobDisplays();
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  });
+});
+
+// Page Button Navigation
+const navBtns = [
+  { id: 'btn-home', fam: 'HOME' },
+  { id: 'btn-edit', fam: 'EDIT' },
+  { id: 'btn-env', fam: 'ENV' },
+  { id: 'btn-fx', fam: 'FX' },
+  { id: 'btn-seq', fam: 'SEQ' },
+  { id: 'btn-scl', fam: 'SCL' },
+  { id: 'btn-lfo', fam: 'LFO' },
+  { id: 'btn-save', fam: 'SAVE' }
+];
+
+navBtns.forEach(b => {
+  const el = document.getElementById(b.id);
+  el.addEventListener('click', () => {
+    if (state.pageFam === b.fam) {
+      // Cycle pages inside family
+      state.pageIndex = (state.pageIndex + 1) % PAGES[b.fam].length;
+    } else {
+      state.pageFam = b.fam;
+      state.pageIndex = 0;
+    }
+    navBtns.forEach(o => document.getElementById(o.id).classList.remove('active'));
+    el.classList.add('active');
+    updateKnobDisplays();
+  });
+});
+
+// Creature Selector
+document.querySelectorAll('.c-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.c-pill').forEach(p => p.classList.remove('active'));
+    pill.classList.add('active');
+    state.creature = parseInt(pill.dataset.creature);
+    
+    // Apply Creature Physics Archetype
+    if (state.creature === 0) { // HUMAN
+      state.p.tract_len = 64; state.p.wall_q = 64; state.p.trachea = 40; state.p.growl = 0;
+    } else if (state.creature === 1) { // TROLL (Deep, large tract)
+      state.p.tract_len = 110; state.p.wall_q = 95; state.p.trachea = 80; state.p.growl = 20;
+    } else if (state.creature === 2) { // ELF (Small, bright, high resonance)
+      state.p.tract_len = 25; state.p.wall_q = 30; state.p.trachea = 15; state.p.growl = 0;
+    } else if (state.creature === 3) { // BEAST (Overdriven growl)
+      state.p.tract_len = 90; state.p.wall_q = 80; state.p.trachea = 90; state.p.growl = 85;
+    }
+    updateKnobDisplays();
+  });
+});
+
+// Transport Listeners
+document.getElementById('btn-play').addEventListener('click', togglePlay);
+document.getElementById('btn-arp').addEventListener('click', triggerReSpeak);
+document.getElementById('btn-octdn').addEventListener('click', () => {
+  if (state.octave > -3) state.octave--;
+});
+document.getElementById('btn-octup').addEventListener('click', () => {
+  if (state.octave < 3) state.octave++;
+});
+
+// --- KEYBOARD RENDERING & MIDI INPUT ---
+const whiteKeysContainer = document.getElementById('white-keys');
+const blackKeysContainer = document.getElementById('black-keys');
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const whiteNotes = [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74]; // 16 white keys (C3 to D5)
+const blackNotes = [
+  { note: 49, left: 4.8 },  // C#3
+  { note: 51, left: 11.0 }, // D#3
+  { note: 54, left: 23.5 }, // F#3
+  { note: 56, left: 29.8 }, // G#3
+  { note: 58, left: 36.0 }, // A#3
+  { note: 61, left: 48.5 }, // C#4
+  { note: 63, left: 54.8 }, // D#4
+  { note: 66, left: 67.2 }, // F#4
+  { note: 68, left: 73.5 }, // G#4
+  { note: 70, left: 79.8 }, // A#4
+  { note: 73, left: 92.2 }  // C#5
+];
+
+whiteNotes.forEach((midi, idx) => {
+  const el = document.createElement('div');
+  el.className = 'key-white';
+  el.id = `key-${midi}`;
+  el.innerHTML = `
+    <div class="step-led" id="step-led-${idx}"></div>
+    <span>${NOTE_NAMES[midi % 12]}</span>
+  `;
+  el.addEventListener('mousedown', () => noteOn(midi));
+  el.addEventListener('mouseup', () => noteOff(midi));
+  el.addEventListener('mouseleave', () => noteOff(midi));
+  whiteKeysContainer.appendChild(el);
+});
+
+blackNotes.forEach(b => {
+  const el = document.createElement('div');
+  el.className = 'key-black';
+  el.id = `key-${b.note}`;
+  el.style.left = `${b.left}%`;
+  el.textContent = NOTE_NAMES[b.note % 12];
+  el.addEventListener('mousedown', () => noteOn(b.note));
+  el.addEventListener('mouseup', () => noteOff(b.note));
+  el.addEventListener('mouseleave', () => noteOff(b.note));
+  blackKeysContainer.appendChild(el);
+});
+
+function noteOn(midi) {
+  initAudio();
+  const freq = 440 * Math.pow(2, (midi + state.octave * 12 - 69) / 12);
+  state.currentFreq = freq;
+  state.noteActive = true;
+  state.morph.phase = 0.0;
+  state.morph.active = true;
+  const k = document.getElementById(`key-${midi}`);
+  if (k) k.classList.add('active');
+}
+
+function noteOff(midi) {
+  if (!state.playing) {
+    state.noteActive = false;
+  }
+  const k = document.getElementById(`key-${midi}`);
+  if (k) k.classList.remove('active');
+}
+
+function updateKeyHighlights() {
+  for (let s = 0; s < 16; s++) {
+    const led = document.getElementById(`step-led-${s}`);
+    if (led) {
+      led.classList.remove('current', 'lit');
+      if (s === state.seqStep && state.playing) {
+        led.classList.add('current');
+      } else if (!SENTENCE[s].tie) {
+        led.classList.add('lit');
+      }
+    }
+  }
+}
+
+// Computer Keyboard support (ASDFGHJK / WETYU)
+const KEY_MAP = {
+  'KeyA': 48, 'KeyW': 49, 'KeyS': 50, 'KeyE': 51, 'KeyD': 52,
+  'KeyF': 53, 'KeyT': 54, 'KeyG': 55, 'KeyY': 56, 'KeyH': 57,
+  'KeyU': 58, 'KeyJ': 59, 'KeyK': 60, 'KeyO': 61, 'KeyL': 62
+};
+window.addEventListener('keydown', (e) => {
+  if (KEY_MAP[e.code] && !e.repeat) {
+    noteOn(KEY_MAP[e.code]);
+  } else if (e.code === 'Space') {
+    e.preventDefault();
+    togglePlay();
+  }
+});
+window.addEventListener('keyup', (e) => {
+  if (KEY_MAP[e.code]) {
+    noteOff(KEY_MAP[e.code]);
+  }
+});
+
+// Initialize Displays & Start RAF Loop
+updateKnobDisplays();
+updateKeyHighlights();
+requestAnimationFrame(drawLCD);
+</script>
+
+</body>
+</html>
